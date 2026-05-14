@@ -590,8 +590,11 @@ function HashRouter({
           <strong>금공러</strong>
         </button>
         <div className="mobile-header-actions">
-          <button className="secondary-button compact" onClick={() => setSearchOpen(true)}>
-            검색
+          <button className="mobile-search-button" onClick={() => setSearchOpen(true)} aria-label="검색">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6" />
+              <path d="m16 16 4 4" />
+            </svg>
           </button>
         </div>
       </header>

@@ -237,6 +237,28 @@ a {
   align-items: center;
 }
 
+.mobile-search-button {
+  display: inline-grid;
+  width: 38px;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid rgb(111 135 150 / 16%);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--text);
+  background: rgb(255 255 255 / 34%);
+}
+
+.mobile-search-button svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
 .page-stack {
   display: grid;
   gap: 22px;
