@@ -1414,6 +1414,16 @@ summary {
   line-height: 1.55;
 }
 
+.soft-notice {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: var(--coral-wash);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .inline-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

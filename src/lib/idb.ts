@@ -4,6 +4,17 @@ const DB_NAME = "geumgong-study-manager";
 const DB_VERSION = 1;
 const STORE_NAME = "study";
 const DATA_KEY = "data";
+const AUTH_SESSION_KEY = "auth-session";
+
+export type AuthSession = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  user: {
+    id: string;
+    email?: string;
+  };
+};
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -49,4 +60,16 @@ export function loadStudyData(): Promise<StudyData | undefined> {
 
 export function saveStudyData(data: StudyData): Promise<IDBValidKey> {
   return runTransaction<IDBValidKey>("readwrite", (store) => store.put(data, DATA_KEY));
+}
+
+export function loadAuthSession(): Promise<AuthSession | undefined> {
+  return runTransaction<AuthSession | undefined>("readonly", (store) => store.get(AUTH_SESSION_KEY));
+}
+
+export function saveAuthSession(session: AuthSession): Promise<IDBValidKey> {
+  return runTransaction<IDBValidKey>("readwrite", (store) => store.put(session, AUTH_SESSION_KEY));
+}
+
+export function clearAuthSession(): Promise<undefined> {
+  return runTransaction<undefined>("readwrite", (store) => store.delete(AUTH_SESSION_KEY));
 }

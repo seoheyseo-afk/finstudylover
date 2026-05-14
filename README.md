@@ -1,11 +1,11 @@
 # 금공러
 
-금융공기업 취준생용 로컬 학습관리 웹앱입니다. 중급회계, 재무관리, 법인세법, 경영학, 경제학, NCS 과목을 기본으로 만들고, 자료 원본 목차와 과목 표준목차를 분리해 관리합니다.
+금융공기업 취준생용 학습관리 웹앱입니다. 중급회계, 재무관리, 법인세법, 경영학, 경제학, NCS 과목을 기본으로 만들고, 자료 원본 목차와 과목 표준목차를 분리해 관리합니다. 기본 저장은 브라우저 IndexedDB를 사용하고, Supabase 환경변수를 설정하면 이메일 로그인으로 여러 기기에서 같은 데이터를 동기화할 수 있습니다.
 
 ## 핵심 기능
 
 - 브라우저 IndexedDB 저장
-- 서버, 로그인, Supabase 없음
+- Supabase 이메일 로그인 동기화
 - 자료 원본 목차 진도 체크
 - 자료 목차와 과목 표준목차 다대다 매핑
 - 과목 표준목차로 기록 통합 조회
@@ -38,14 +38,18 @@ npm run build
 npm run preview
 ```
 
-## GitHub Pages 배포
+## 배포
 
 `vite.config.ts`에 `base: "./"`가 설정되어 있고, 라우팅은 URL hash를 사용합니다.
 
-1. 이 폴더 내용을 GitHub 저장소 루트로 올립니다.
-2. GitHub 저장소 Settings > Pages에서 Source를 `GitHub Actions`로 설정합니다.
-3. `main` 브랜치에 push하거나 Actions에서 `Deploy to GitHub Pages` workflow를 수동 실행합니다.
-4. 서버 환경변수나 외부 백엔드 설정은 필요 없습니다.
+Vercel에 연결하면 `main` 브랜치 push 시 자동으로 재배포됩니다. GitHub Pages도 `.github/workflows/deploy.yml`로 사용할 수 있습니다.
+
+Supabase 동기화를 쓰려면 Vercel 프로젝트의 Environment Variables에 아래 값을 추가한 뒤 재배포합니다.
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Supabase에는 `study_data` 테이블과 사용자별 RLS 정책이 필요합니다.
 
 ## 백업
 
@@ -70,6 +74,6 @@ npm run preview
 - 공부기록 백업과 공부기록 불러오기가 되는지
 - 모바일 폭에서 하단 탭과 기록함, 카드 복습 화면이 깨지지 않는지
 
-## 1차 MVP 범위
+## 동기화 범위
 
-서버형 공유, 로그인, 실시간 동기화는 제외했습니다. `공유하기` 버튼은 추후 읽기 전용 링크 방식으로 확장할 위치를 잡아 둔 안내 모달입니다.
+로그인하지 않으면 각 브라우저에만 저장됩니다. 로그인하면 현재 데이터가 Supabase에 저장되고, 같은 계정으로 로그인한 컴퓨터와 휴대폰에서 같은 데이터를 불러와 수정할 수 있습니다. 동시에 여러 기기에서 수정하면 마지막 저장 내용이 우선합니다.

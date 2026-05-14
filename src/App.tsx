@@ -1,8 +1,16 @@
 import { type ChangeEvent, type DragEvent, type FormEvent, type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createDefaultStudyData, mergeDefaultTemplate } from "./data/defaultData";
 import { CoralCrowLogo } from "./components/CoralCrowLogo";
-import { loadStudyData, saveStudyData } from "./lib/idb";
+import { clearAuthSession, loadAuthSession, loadStudyData, saveAuthSession, saveStudyData, type AuthSession } from "./lib/idb";
 import { createId, formatOrder, parseOutline } from "./lib/outlineParser";
+import {
+  isSupabaseConfigured,
+  loadCloudStudyData,
+  refreshAuthSession,
+  saveCloudStudyData,
+  signInWithPassword,
+  signUpWithPassword,
+} from "./lib/supabaseSync";
 import {
   MATERIAL_CATEGORIES,
   PROGRESS_STATUSES,
@@ -263,22 +271,52 @@ function useHashPath() {
 function App() {
   const [data, setData] = useState<StudyData | null>(null);
   const [loadError, setLoadError] = useState("");
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [syncMessage, setSyncMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
 
-    loadStudyData()
-      .then((stored) => {
+    Promise.all([loadStudyData(), loadAuthSession()])
+      .then(async ([stored, savedSession]) => {
         if (!mounted) return;
+        const localData = stored ? normalizeStudyData(stored) : normalizeStudyData(createDefaultStudyData());
+
+        if (savedSession && isSupabaseConfigured) {
+          try {
+            const session = await refreshAuthSession(savedSession);
+            if (!mounted) return;
+            setAuthSession(session);
+            void saveAuthSession(session);
+            const cloudRow = await loadCloudStudyData(session);
+            if (!mounted) return;
+            if (cloudRow) {
+              const cloudData = normalizeStudyData(cloudRow.data);
+              setData(cloudData);
+              void saveStudyData(cloudData);
+              setSyncMessage("클라우드 데이터와 연결됨");
+              return;
+            }
+            setData(localData);
+            void saveStudyData(localData);
+            void saveCloudStudyData(session, localData);
+            setSyncMessage("이 브라우저 데이터를 클라우드에 올림");
+            return;
+          } catch (error) {
+            console.error("Failed to restore cloud session", error);
+            void clearAuthSession();
+            setAuthSession(null);
+            setSyncMessage("로그인이 만료되어 로컬 데이터로 열림");
+          }
+        }
+
         if (stored) {
-          const normalized = normalizeStudyData(stored);
-          setData(normalized);
-          void saveStudyData(normalized);
+          setData(localData);
+          void saveStudyData(localData);
           return;
         }
-        const defaults = normalizeStudyData(createDefaultStudyData());
-        setData(defaults);
-        void saveStudyData(defaults);
+        setData(localData);
+        void saveStudyData(localData);
       })
       .catch((error) => {
         setLoadError(error instanceof Error ? error.message : "IndexedDB를 열 수 없습니다.");
@@ -296,6 +334,9 @@ function App() {
       void saveStudyData(next).catch((error) => {
         console.error("Failed to save study data", error);
       });
+      if (authSession) {
+        void syncStudyData(authSession, next);
+      }
       return next;
     });
   };
@@ -304,6 +345,59 @@ function App() {
     const normalized = normalizeStudyData(next);
     setData(normalized);
     void saveStudyData(normalized);
+    if (authSession) {
+      void syncStudyData(authSession, normalized);
+    }
+  };
+
+  const syncStudyData = async (session: AuthSession, next: StudyData) => {
+    try {
+      const refreshed = await refreshAuthSession(session);
+      if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
+        await saveAuthSession(refreshed);
+        setAuthSession(refreshed);
+      }
+      await saveCloudStudyData(refreshed, next);
+    } catch (error) {
+      console.error("Failed to sync study data", error);
+      setSyncMessage("클라우드 저장 실패");
+    }
+  };
+
+  const handleSignIn = async (email: string, password: string) => {
+    if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
+    const session = await signInWithPassword(email, password);
+    await saveAuthSession(session);
+    setAuthSession(session);
+    const cloudRow = await loadCloudStudyData(session);
+    if (cloudRow) {
+      const cloudData = normalizeStudyData(cloudRow.data);
+      setData(cloudData);
+      await saveStudyData(cloudData);
+      setSyncMessage("클라우드 데이터 불러옴");
+      return;
+    }
+    await saveCloudStudyData(session, data);
+    setSyncMessage("현재 브라우저 데이터를 클라우드에 올림");
+  };
+
+  const handleSignUp = async (email: string, password: string) => {
+    if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
+    const session = await signUpWithPassword(email, password);
+    if (!session) {
+      setSyncMessage("가입 확인 메일을 확인해주세요.");
+      return;
+    }
+    await saveAuthSession(session);
+    setAuthSession(session);
+    await saveCloudStudyData(session, data);
+    setSyncMessage("가입 후 현재 데이터를 클라우드에 올림");
+  };
+
+  const handleSignOut = async () => {
+    await clearAuthSession();
+    setAuthSession(null);
+    setSyncMessage("로그아웃됨. 이 브라우저의 로컬 데이터는 유지됩니다.");
   };
 
   if (loadError) {
@@ -327,23 +421,45 @@ function App() {
     );
   }
 
-  return <HashRouter data={data} updateData={updateData} replaceData={replaceData} />;
+  return (
+    <HashRouter
+      data={data}
+      updateData={updateData}
+      replaceData={replaceData}
+      authSession={authSession}
+      syncMessage={syncMessage}
+      onSignIn={handleSignIn}
+      onSignUp={handleSignUp}
+      onSignOut={handleSignOut}
+    />
+  );
 }
 
 function HashRouter({
   data,
   updateData,
   replaceData,
+  authSession,
+  syncMessage,
+  onSignIn,
+  onSignUp,
+  onSignOut,
 }: {
   data: StudyData;
   updateData: (updater: (current: StudyData) => StudyData) => void;
   replaceData: (next: StudyData) => void;
+  authSession: AuthSession | null;
+  syncMessage: string;
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onSignUp: (email: string, password: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
 }) {
   const path = useHashPath();
   const [recordModal, setRecordModal] = useState<RecordModalContext | null>(null);
   const [mappingTopic, setMappingTopic] = useState<MaterialTopic | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSession | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [todayCompleteOpen, setTodayCompleteOpen] = useState(false);
   const segments = path.split("/").filter(Boolean);
@@ -414,7 +530,16 @@ function HashRouter({
       />
     );
   } else if (page === "settings") {
-    content = <SettingsPage data={data} updateData={updateData} replaceData={replaceData} />;
+    content = (
+      <SettingsPage
+        data={data}
+        updateData={updateData}
+        replaceData={replaceData}
+        authSession={authSession}
+        syncMessage={syncMessage}
+        onOpenSync={() => setSyncOpen(true)}
+      />
+    );
   } else {
     content = <Dashboard data={data} startReview={startReview} />;
   }
@@ -457,6 +582,9 @@ function HashRouter({
         </nav>
         <button className="secondary-button wide" onClick={() => setShareOpen(true)}>
           공유하기
+        </button>
+        <button className="secondary-button wide" onClick={() => setSyncOpen(true)}>
+          동기화
         </button>
         <button className="secondary-button wide" onClick={() => setSearchOpen(true)}>
           검색
@@ -517,6 +645,16 @@ function HashRouter({
       {todayCompleteOpen && <TodayCompletionModal data={data} onClose={() => setTodayCompleteOpen(false)} />}
       {searchOpen && <SearchModal data={data} onClose={() => setSearchOpen(false)} />}
       {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
+      {syncOpen && (
+        <SyncModal
+          authSession={authSession}
+          syncMessage={syncMessage}
+          onClose={() => setSyncOpen(false)}
+          onSignIn={onSignIn}
+          onSignUp={onSignUp}
+          onSignOut={onSignOut}
+        />
+      )}
     </div>
   );
 }
@@ -2849,10 +2987,16 @@ function SettingsPage({
   data,
   updateData,
   replaceData,
+  authSession,
+  syncMessage,
+  onOpenSync,
 }: {
   data: StudyData;
   updateData: (updater: (current: StudyData) => StudyData) => void;
   replaceData: (next: StudyData) => void;
+  authSession: AuthSession | null;
+  syncMessage: string;
+  onOpenSync: () => void;
 }) {
   const [confirm, setConfirm] = useState<"supplement" | "default-reset" | "blank-reset" | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -2937,6 +3081,19 @@ function SettingsPage({
           </section>
 
           <section className="panel">
+            <h2>클라우드 동기화</h2>
+            <p className="muted">
+              {authSession ? `${authSession.user.email || "로그인 계정"}으로 Supabase에 연결되어 있습니다.` : "로그인하면 컴퓨터와 휴대폰에서 같은 데이터를 수정할 수 있습니다."}
+            </p>
+            {syncMessage && <p className="muted">{syncMessage}</p>}
+            <div className="settings-action-row">
+              <button className="secondary-button" onClick={onOpenSync}>
+                {authSession ? "동기화 관리" : "로그인 / 회원가입"}
+              </button>
+            </div>
+          </section>
+
+          <section className="panel">
             <h2>데이터 관리</h2>
             <div className="settings-action-row">
               <button className="secondary-button" onClick={() => setConfirm("supplement")}>
@@ -2968,15 +3125,15 @@ function SettingsPage({
               </div>
               <div>
                 <dt>서버</dt>
-                <dd>서버 저장 없음</dd>
+                <dd>{authSession ? "Supabase 연결됨" : "로컬 저장"}</dd>
               </div>
               <div>
                 <dt>저장 방식</dt>
-                <dd>브라우저 IndexedDB</dd>
+                <dd>{authSession ? "Supabase + 브라우저 IndexedDB" : "브라우저 IndexedDB"}</dd>
               </div>
               <div>
                 <dt>동기화</dt>
-                <dd>자동 동기화 없음</dd>
+                <dd>{authSession ? "로그인 계정 자동 동기화" : "자동 동기화 없음"}</dd>
               </div>
             </dl>
           </section>
@@ -4867,9 +5024,124 @@ function ConfirmModal({
   );
 }
 
+function SyncModal({
+  authSession,
+  syncMessage,
+  onClose,
+  onSignIn,
+  onSignUp,
+  onSignOut,
+}: {
+  authSession: AuthSession | null;
+  syncMessage: string;
+  onClose: () => void;
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onSignUp: (email: string, password: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
+}) {
+  const [email, setEmail] = useState(authSession?.user.email || "");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (mode: "signin" | "signup") => {
+    if (!email.trim() || !password) {
+      setStatus("이메일과 비밀번호를 입력하세요.");
+      return;
+    }
+    setSubmitting(true);
+    setStatus("");
+    try {
+      if (mode === "signin") {
+        await onSignIn(email.trim(), password);
+        setStatus("로그인했습니다.");
+      } else {
+        await onSignUp(email.trim(), password);
+        setStatus("회원가입을 처리했습니다.");
+      }
+      setPassword("");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "동기화 처리에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const signOut = async () => {
+    setSubmitting(true);
+    setStatus("");
+    try {
+      await onSignOut();
+      setStatus("로그아웃했습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "로그아웃에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-panel small-modal">
+        <div className="modal-header">
+          <h2>클라우드 동기화</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">
+            ×
+          </button>
+        </div>
+
+        {!isSupabaseConfigured ? (
+          <p className="soft-notice">Supabase 환경변수를 설정하면 로그인 동기화를 사용할 수 있습니다.</p>
+        ) : authSession ? (
+          <>
+            <p>{authSession.user.email || "로그인 계정"}으로 연결되어 있습니다.</p>
+            {syncMessage && <p className="muted">{syncMessage}</p>}
+            {status && <p className="muted">{status}</p>}
+            <div className="modal-actions">
+              <button className="secondary-button" onClick={onClose}>
+                확인
+              </button>
+              <button className="danger-button" onClick={signOut} disabled={submitting}>
+                로그아웃
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>같은 이메일로 로그인하면 컴퓨터와 휴대폰에서 같은 공부 데이터를 수정할 수 있습니다.</p>
+            <label className="field-label">
+              이메일
+              <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+            </label>
+            <label className="field-label">
+              비밀번호
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            {syncMessage && <p className="muted">{syncMessage}</p>}
+            {status && <p className="muted">{status}</p>}
+            <div className="modal-actions">
+              <button className="secondary-button" onClick={() => submit("signup")} disabled={submitting}>
+                회원가입
+              </button>
+              <button className="primary-button" onClick={() => submit("signin")} disabled={submitting}>
+                로그인
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ShareModal({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState("");
-  const shareUrl = `${window.location.origin}${window.location.pathname}`;
+  const shareUrl = `${window.location.origin}${window.location.pathname}#/dashboard`;
 
   const shareLink = async () => {
     const payload = {
@@ -4900,7 +5172,8 @@ function ShareModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p>
-          현재 앱 링크를 공유합니다. 공부 데이터는 이 브라우저의 IndexedDB에 저장되므로, 데이터 이동은 백업 파일을 사용하세요.
+          현재 앱 링크를 공유합니다. 로그인 동기화를 켜면 같은 계정으로 컴퓨터와 휴대폰에서 같은 데이터를 사용할 수
+          있습니다. 로그인을 쓰지 않을 때는 백업 파일로 데이터를 옮기세요.
         </p>
         <label className="field-label">
           공유 링크
