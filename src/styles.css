@@ -2815,7 +2815,7 @@ textarea::placeholder {
     left: 0;
     z-index: 11;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 5px;
     border-top: 1px solid rgb(255 255 255 / 24%);
     padding: 8px;
@@ -2829,10 +2829,18 @@ textarea::placeholder {
   }
 
   .bottom-tab {
+    display: flex;
+    width: 100%;
+    min-width: 0;
     min-height: 44px;
+    align-items: center;
+    justify-content: center;
     padding: 0 4px;
+    overflow: hidden;
     text-align: center;
     font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 
   .topic-layout,
