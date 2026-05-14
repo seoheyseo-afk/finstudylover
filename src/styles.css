@@ -2564,6 +2564,10 @@ textarea::placeholder {
   font-size: 14px;
 }
 
+.empty-completion-table {
+  table-layout: fixed;
+}
+
 .today-completion-table th,
 .today-completion-table td {
   min-width: 74px;
@@ -2592,6 +2596,16 @@ textarea::placeholder {
   position: sticky;
   right: 0;
   z-index: 1;
+}
+
+.empty-completion-table th,
+.empty-completion-table td,
+.empty-completion-table th:first-child,
+.empty-completion-table td:first-child,
+.empty-completion-table th:last-child,
+.empty-completion-table td:last-child {
+  width: 50%;
+  min-width: 0;
 }
 
 .today-completion-table thead th {
@@ -3137,6 +3151,11 @@ textarea::placeholder {
     font-size: 12px;
   }
 
+  .empty-completion-table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
   .today-completion-table th,
   .today-completion-table td {
     min-width: clamp(44px, 13.5vw, 58px);
@@ -3164,6 +3183,16 @@ textarea::placeholder {
   .today-completion-table th:last-child,
   .today-completion-table td:last-child {
     min-width: clamp(34px, 9vw, 42px);
+  }
+
+  .empty-completion-table th,
+  .empty-completion-table td,
+  .empty-completion-table th:first-child,
+  .empty-completion-table td:first-child,
+  .empty-completion-table th:last-child,
+  .empty-completion-table td:last-child {
+    width: 50%;
+    min-width: 0;
   }
 
   .completion-value,

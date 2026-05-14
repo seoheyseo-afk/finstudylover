@@ -699,7 +699,7 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
         </div>
 
         <div className="today-completion-table-wrap">
-          <table className="today-completion-table">
+          <table className={summary.total === 0 ? "today-completion-table empty-completion-table" : "today-completion-table"}>
             <thead>
               <tr>
                 <th>
