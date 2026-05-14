@@ -5,7 +5,7 @@
   "start_url": "./",
   "display": "standalone",
   "background_color": "#E9F0F5",
-  "theme_color": "#FF746F",
+  "theme_color": "#A5BDCC",
   "icons": [
     {
       "src": "./coral-crow.svg",

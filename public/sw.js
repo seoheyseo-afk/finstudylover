@@ -1,4 +1,4 @@
-const CACHE_NAME = "geumgong-study-manager-v4";
+const CACHE_NAME = "geumgong-study-manager-v5";
 const APP_SHELL = [
   "./manifest.webmanifest",
   "./icon.svg",
