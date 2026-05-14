@@ -3029,6 +3029,7 @@ function SettingsPage({
     <section className="page-stack">
       <PageHeader
         title="설정"
+        className="settings-page-header"
       />
 
       <div className="settings-grid settings-layout">
@@ -3038,12 +3039,6 @@ function SettingsPage({
             <div className="settings-pane">
               <div className="settings-details">
                 <h3>클라우드 동기화</h3>
-                <p className="muted">
-                  {authSession
-                    ? `${authSession.user.email || "로그인 계정"}으로 Supabase에 연결되어 있습니다.`
-                    : "로그인하면 컴퓨터와 휴대폰에서 같은 데이터를 수정할 수 있습니다."}
-                </p>
-                {syncMessage && <p className="muted">{syncMessage}</p>}
                 <div className="settings-action-row">
                   <button className="secondary-button" onClick={onOpenSync}>
                     {authSession ? "동기화 관리" : "로그인 / 회원가입"}
@@ -3053,7 +3048,6 @@ function SettingsPage({
 
               <div className="settings-details">
                 <h3>백업</h3>
-                <p className="muted">공부 데이터를 파일로 저장하거나, 저장해둔 파일을 이 브라우저로 불러옵니다.</p>
                 <div className="settings-action-row">
                   <button className="secondary-button" onClick={exportBackup}>
                     파일 백업
@@ -3067,7 +3061,6 @@ function SettingsPage({
 
               <div className="settings-details">
                 <h3>앱 링크 공유</h3>
-                <p className="muted">앱 주소만 공유합니다. 공부 데이터 공유는 로그인 동기화나 백업 파일을 사용하세요.</p>
                 <div className="settings-action-row">
                   <button className="secondary-button" onClick={() => setShareOpen(true)}>
                     앱 링크 공유
@@ -4906,6 +4899,7 @@ function PageHeader({
   brandIcon = false,
   onBreadcrumbClick,
   compact = false,
+  className,
 }: {
   eyebrow?: string;
   title: string;
@@ -4915,9 +4909,14 @@ function PageHeader({
   brandIcon?: boolean;
   onBreadcrumbClick?: () => void;
   compact?: boolean;
+  className?: string;
 }) {
+  const headerClassName = ["page-header", compact ? "compact-page-header" : "", className || ""]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <header className={compact ? "page-header compact-page-header" : "page-header"}>
+    <header className={headerClassName}>
       <div>
         {eyebrow && onBreadcrumbClick ? (
           <button className="breadcrumb-button" onClick={onBreadcrumbClick}>
