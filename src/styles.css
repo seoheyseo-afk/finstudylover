@@ -785,36 +785,18 @@ a {
 
 .settings-layout {
   grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
-  grid-template-areas:
-    "system review"
-    "system data"
-    "info dday";
 }
 
-.settings-static-column {
+.settings-static-column,
+.settings-left-column,
+.settings-right-column {
   display: grid;
   min-width: 0;
   gap: 14px;
-}
-
-.settings-system-panel {
-  grid-area: system;
-}
-
-.settings-info-panel {
-  grid-area: info;
-}
-
-.settings-review-panel {
-  grid-area: review;
-}
-
-.settings-data-panel {
-  grid-area: data;
+  align-content: start;
 }
 
 .settings-dday-column {
-  grid-area: dday;
   align-self: start;
 }
 
@@ -2961,18 +2943,20 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 
-  .settings-layout {
-    grid-template-areas: none;
-  }
-
   .settings-static-column,
+  .settings-left-column,
+  .settings-right-column,
   .settings-system-panel,
   .settings-info-panel,
   .settings-review-panel,
   .settings-data-panel,
   .settings-dday-column {
     grid-column: auto;
-    grid-area: auto;
+  }
+
+  .settings-left-column,
+  .settings-right-column {
+    display: contents;
   }
 
   .settings-dday-column {
