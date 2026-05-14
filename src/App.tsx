@@ -26,7 +26,7 @@ import {
 } from "./types";
 
 const DEFAULT_DASHBOARD_SUBJECT_IDS = new Set(["subject-accounting", "subject-finance"]);
-const CURRENT_DATA_VERSION = 11;
+const CURRENT_DATA_VERSION = 12;
 const DEFAULT_SUBJECT_MATERIAL_ORDER: Record<string, string[]> = {
   "subject-accounting": [
     "material-ifrs-intermediate-lecture",
@@ -6011,6 +6011,7 @@ function normalizeStudyData(data: StudyData): StudyData {
   const shouldApplyVersion6Defaults = (nextData.version || 1) < 6;
   const shouldApplyVersion7Defaults = (nextData.version || 1) < 7;
   const shouldApplyVersion8Defaults = (nextData.version || 1) < 8;
+  const shouldApplyVersion12Defaults = (nextData.version || 1) < 12;
   if ((nextData.version || 1) < 3) {
     nextData = addDefaultMaterial(nextData, "material-ifrs-intermediate-lecture");
   }
@@ -6022,6 +6023,9 @@ function normalizeStudyData(data: StudyData): StudyData {
   }
   if (shouldApplyVersion7Defaults) {
     nextData = addDefaultMaterial(nextData, "material-hwang-public-accounting");
+  }
+  if (shouldApplyVersion12Defaults) {
+    nextData = addDefaultSubtopics(nextData);
   }
 
   const subjects = nextData.subjects.map((subject) =>
@@ -6195,6 +6199,26 @@ function addDefaultMaterial(data: StudyData, materialId: string): StudyData {
     ],
     materialTopics: nextMaterialTopics,
     mappings: [...data.mappings, ...addedMappings.filter((mapping) => !hasId(data.mappings, mapping.id))],
+  };
+}
+
+function addDefaultSubtopics(data: StudyData): StudyData {
+  const defaults = createDefaultStudyData();
+  const normalizeLabel = (value: string) => value.trim().replace(/\s+/g, " ");
+  const validStandardIds = new Set(data.standardTopics.map((topic) => topic.id));
+  const existingIds = new Set(data.subtopics.map((subtopic) => subtopic.id));
+  const existingKeys = new Set(data.subtopics.map((subtopic) => `${subtopic.standardTopicId}:${normalizeLabel(subtopic.title)}`));
+  const addedSubtopics = defaults.subtopics.filter(
+    (subtopic) =>
+      validStandardIds.has(subtopic.standardTopicId) &&
+      !existingIds.has(subtopic.id) &&
+      !existingKeys.has(`${subtopic.standardTopicId}:${normalizeLabel(subtopic.title)}`),
+  );
+
+  if (addedSubtopics.length === 0) return data;
+  return {
+    ...data,
+    subtopics: [...data.subtopics, ...addedSubtopics],
   };
 }
 
