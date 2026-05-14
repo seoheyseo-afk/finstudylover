@@ -461,9 +461,6 @@ function HashRouter({
         <button className="secondary-button wide" onClick={() => setSearchOpen(true)}>
           검색
         </button>
-        <button className="primary-button wide" onClick={openQuickRecord}>
-          + 기록
-        </button>
       </aside>
 
       <header className="mobile-header">
@@ -474,9 +471,6 @@ function HashRouter({
         <div className="mobile-header-actions">
           <button className="secondary-button compact" onClick={() => setSearchOpen(true)}>
             검색
-          </button>
-          <button className="primary-button compact" onClick={openQuickRecord}>
-            + 기록
           </button>
         </div>
       </header>
