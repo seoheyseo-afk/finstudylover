@@ -3116,7 +3116,7 @@ textarea::placeholder {
   }
 
   .today-completion-table {
-    width: max-content;
+    width: max(100%, max-content);
     min-width: 0;
     border-spacing: 4px;
     font-size: 12px;
@@ -3124,7 +3124,7 @@ textarea::placeholder {
 
   .today-completion-table th,
   .today-completion-table td {
-    min-width: 46px;
+    min-width: clamp(44px, 13.5vw, 58px);
     height: 38px;
     border-radius: 9px;
     padding: 6px 5px;
@@ -3139,12 +3139,16 @@ textarea::placeholder {
 
   .today-completion-table th:first-child,
   .today-completion-table td:first-child {
-    min-width: 54px;
+    min-width: clamp(42px, 12vw, 52px);
+  }
+
+  .completion-corner-label {
+    display: none;
   }
 
   .today-completion-table th:last-child,
   .today-completion-table td:last-child {
-    min-width: 38px;
+    min-width: clamp(34px, 9vw, 42px);
   }
 
   .completion-value,

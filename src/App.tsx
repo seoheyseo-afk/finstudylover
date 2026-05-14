@@ -702,7 +702,9 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
           <table className="today-completion-table">
             <thead>
               <tr>
-                <th>자료/과목</th>
+                <th>
+                  <span className="completion-corner-label">자료/과목</span>
+                </th>
                 {summary.subjects.map((subject) => (
                   <th key={subject.id}>{subject.name}</th>
                 ))}
