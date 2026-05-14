@@ -3032,114 +3032,117 @@ function SettingsPage({
       />
 
       <div className="settings-grid settings-layout">
-        <div className="settings-static-column">
-          <section className="panel">
-            <h2>클라우드 동기화</h2>
-            <p className="muted">
-              {authSession
-                ? `${authSession.user.email || "로그인 계정"}으로 Supabase에 연결되어 있습니다.`
-                : "로그인하면 컴퓨터와 휴대폰에서 같은 데이터를 수정할 수 있습니다."}
-            </p>
-            {syncMessage && <p className="muted">{syncMessage}</p>}
-            <div className="settings-action-row">
-              <button className="secondary-button" onClick={onOpenSync}>
-                {authSession ? "동기화 관리" : "로그인 / 회원가입"}
-              </button>
+        <section className="panel settings-system-panel">
+          <h2>시스템</h2>
+          <div className="settings-pane">
+            <div className="settings-details">
+              <h3>클라우드 동기화</h3>
+              <p className="muted">
+                {authSession
+                  ? `${authSession.user.email || "로그인 계정"}으로 Supabase에 연결되어 있습니다.`
+                  : "로그인하면 컴퓨터와 휴대폰에서 같은 데이터를 수정할 수 있습니다."}
+              </p>
+              {syncMessage && <p className="muted">{syncMessage}</p>}
+              <div className="settings-action-row">
+                <button className="secondary-button" onClick={onOpenSync}>
+                  {authSession ? "동기화 관리" : "로그인 / 회원가입"}
+                </button>
+              </div>
             </div>
-          </section>
 
-          <section className="panel">
-            <h2>백업</h2>
-            <p className="muted">공부 데이터를 파일로 저장하거나, 저장해둔 파일을 이 브라우저로 불러옵니다.</p>
-            <div className="settings-action-row">
-              <button className="secondary-button" onClick={exportBackup}>
-                파일 백업
-              </button>
-              <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
-                파일 불러오기
-              </button>
-              <input ref={fileInputRef} className="hidden-input" type="file" accept=".study" onChange={importBackup} />
+            <div className="settings-details">
+              <h3>백업</h3>
+              <p className="muted">공부 데이터를 파일로 저장하거나, 저장해둔 파일을 이 브라우저로 불러옵니다.</p>
+              <div className="settings-action-row">
+                <button className="secondary-button" onClick={exportBackup}>
+                  파일 백업
+                </button>
+                <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
+                  파일 불러오기
+                </button>
+                <input ref={fileInputRef} className="hidden-input" type="file" accept=".study" onChange={importBackup} />
+              </div>
             </div>
-          </section>
 
-          <section className="panel">
-            <h2>앱 링크 공유</h2>
-            <p className="muted">앱 주소만 공유합니다. 공부 데이터 공유는 로그인 동기화나 백업 파일을 사용하세요.</p>
-            <div className="settings-action-row">
-              <button className="secondary-button" onClick={() => setShareOpen(true)}>
-                앱 링크 공유
-              </button>
+            <div className="settings-details">
+              <h3>앱 링크 공유</h3>
+              <p className="muted">앱 주소만 공유합니다. 공부 데이터 공유는 로그인 동기화나 백업 파일을 사용하세요.</p>
+              <div className="settings-action-row">
+                <button className="secondary-button" onClick={() => setShareOpen(true)}>
+                  앱 링크 공유
+                </button>
+              </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <section className="panel">
-            <h2>기록 복습 주기</h2>
-            <p className="muted">이 기간 이상 보지 않은 복습 카드를 대시보드에 표시합니다.</p>
-            <label className="field-label">
-              일수
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={data.settings.reviewGapDays}
-                onChange={(event) =>
-                  updateData((current) => ({
-                    ...current,
-                    settings: {
-                      ...current.settings,
-                      reviewGapDays: Number(event.target.value) || 14,
-                    },
-                  }))
-                }
-              />
-            </label>
-          </section>
-
-          <section className="panel">
-            <h2>데이터 관리</h2>
-            <div className="settings-action-row">
-              <button className="secondary-button" onClick={() => setConfirm("supplement")}>
-                기본 보충
-              </button>
-              <button className="danger-button" onClick={() => setConfirm("default-reset")}>
-                기본 초기화
-              </button>
-              <button className="danger-button" onClick={() => setConfirm("blank-reset")}>
-                전체 초기화
-              </button>
+        <section className="panel settings-info-panel">
+          <h2>앱 정보</h2>
+          <dl className="info-list">
+            <div>
+              <dt>앱 이름</dt>
+              <dd>금공러</dd>
             </div>
-          </section>
+            <div>
+              <dt>설명</dt>
+              <dd>금융공부러버의 금공 취준 학습관리</dd>
+            </div>
+            <div>
+              <dt>제작</dt>
+              <dd>quemory ♥</dd>
+            </div>
+            <div>
+              <dt>서버</dt>
+              <dd>{authSession ? "Supabase 연결됨" : "로컬 저장"}</dd>
+            </div>
+            <div>
+              <dt>저장 방식</dt>
+              <dd>{authSession ? "Supabase + 브라우저 IndexedDB" : "브라우저 IndexedDB"}</dd>
+            </div>
+            <div>
+              <dt>동기화</dt>
+              <dd>{authSession ? "로그인 계정 자동 동기화" : "자동 동기화 없음"}</dd>
+            </div>
+          </dl>
+        </section>
 
-          <section className="panel">
-            <h2>앱 정보</h2>
-            <dl className="info-list">
-              <div>
-                <dt>앱 이름</dt>
-                <dd>금공러</dd>
-              </div>
-              <div>
-                <dt>설명</dt>
-                <dd>금융공부러버의 금공 취준 학습관리</dd>
-              </div>
-              <div>
-                <dt>제작</dt>
-                <dd>quemory ♥</dd>
-              </div>
-              <div>
-                <dt>서버</dt>
-                <dd>{authSession ? "Supabase 연결됨" : "로컬 저장"}</dd>
-              </div>
-              <div>
-                <dt>저장 방식</dt>
-                <dd>{authSession ? "Supabase + 브라우저 IndexedDB" : "브라우저 IndexedDB"}</dd>
-              </div>
-              <div>
-                <dt>동기화</dt>
-                <dd>{authSession ? "로그인 계정 자동 동기화" : "자동 동기화 없음"}</dd>
-              </div>
-            </dl>
-          </section>
-        </div>
+        <section className="panel settings-review-panel">
+          <h2>기록 복습 주기</h2>
+          <p className="muted">이 기간 이상 보지 않은 복습 카드를 대시보드에 표시합니다.</p>
+          <label className="field-label">
+            일수
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={data.settings.reviewGapDays}
+              onChange={(event) =>
+                updateData((current) => ({
+                  ...current,
+                  settings: {
+                    ...current.settings,
+                    reviewGapDays: Number(event.target.value) || 14,
+                  },
+                }))
+              }
+            />
+          </label>
+        </section>
+
+        <section className="panel settings-data-panel">
+          <h2>데이터 관리</h2>
+          <div className="settings-action-row">
+            <button className="secondary-button" onClick={() => setConfirm("supplement")}>
+              기본 보충
+            </button>
+            <button className="danger-button" onClick={() => setConfirm("default-reset")}>
+              기본 초기화
+            </button>
+            <button className="danger-button" onClick={() => setConfirm("blank-reset")}>
+              전체 초기화
+            </button>
+          </div>
+        </section>
 
         <section className="panel dday-management-panel settings-dday-column">
           <h2>디데이 관리</h2>

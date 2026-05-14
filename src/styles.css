@@ -785,6 +785,10 @@ a {
 
 .settings-layout {
   grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  grid-template-areas:
+    "system review"
+    "system data"
+    "info dday";
 }
 
 .settings-static-column {
@@ -793,7 +797,24 @@ a {
   gap: 14px;
 }
 
+.settings-system-panel {
+  grid-area: system;
+}
+
+.settings-info-panel {
+  grid-area: info;
+}
+
+.settings-review-panel {
+  grid-area: review;
+}
+
+.settings-data-panel {
+  grid-area: data;
+}
+
 .settings-dday-column {
+  grid-area: dday;
   align-self: start;
 }
 
@@ -1101,6 +1122,15 @@ details.settings-details > *:not(summary) {
 
 .settings-pane h3 {
   font-size: 18px;
+}
+
+.settings-system-panel .settings-details {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-system-panel .settings-action-row {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
 }
 
 .settings-action-row {
@@ -2931,12 +2961,37 @@ textarea::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .settings-layout {
+    grid-template-areas: none;
+  }
+
   .settings-static-column,
+  .settings-system-panel,
+  .settings-info-panel,
+  .settings-review-panel,
+  .settings-data-panel,
   .settings-dday-column {
     grid-column: auto;
+    grid-area: auto;
   }
 
   .settings-dday-column {
+    order: -5;
+  }
+
+  .settings-system-panel {
+    order: -4;
+  }
+
+  .settings-review-panel {
+    order: -3;
+  }
+
+  .settings-data-panel {
+    order: -2;
+  }
+
+  .settings-info-panel {
     order: -1;
   }
 
