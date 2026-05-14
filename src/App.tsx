@@ -5122,11 +5122,11 @@ function SyncModal({
             <p className="sync-modal-description">
               동일한 계정으로 로그인하면 PC와 모바일에서 학습 데이터를 동기화해 관리할 수 있습니다.
             </p>
-            <label className="field-label">
+            <label className="field-label sync-modal-field">
               이메일
               <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
             </label>
-            <label className="field-label">
+            <label className="field-label sync-modal-field">
               비밀번호
               <input
                 type="password"

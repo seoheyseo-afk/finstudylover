@@ -2499,6 +2499,10 @@ textarea::placeholder {
   word-break: keep-all;
 }
 
+.sync-modal-field + .sync-modal-field {
+  margin-top: 10px;
+}
+
 .today-completion-modal {
   position: relative;
   z-index: 1;
