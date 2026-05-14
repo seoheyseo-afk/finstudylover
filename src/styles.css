@@ -2471,6 +2471,10 @@ textarea::placeholder {
   width: min(100%, 480px);
 }
 
+.sync-modal-description {
+  margin-bottom: 8px;
+}
+
 .today-completion-modal {
   position: relative;
   z-index: 1;

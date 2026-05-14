@@ -5116,7 +5116,9 @@ function SyncModal({
           </>
         ) : (
           <>
-            <p>같은 이메일로 로그인하면 컴퓨터와 휴대폰에서 같은 공부 데이터를 수정할 수 있습니다.</p>
+            <p className="sync-modal-description">
+              같은 이메일로 로그인하면 컴퓨터와 휴대폰에서 같은 공부 데이터를 수정할 수 있습니다.
+            </p>
             <label className="field-label">
               이메일
               <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
