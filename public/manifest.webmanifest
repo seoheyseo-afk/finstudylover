@@ -1,0 +1,23 @@
+{
+  "name": "금공러",
+  "short_name": "금공러",
+  "description": "금융공기업 취준생용 로컬 학습관리 웹앱",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#E9F0F5",
+  "theme_color": "#FF746F",
+  "icons": [
+    {
+      "src": "./coral-crow.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+import { useId } from "react";
+
+type CoralCrowLogoProps = {
+  className?: string;
+  title?: string;
+  showBackground?: boolean;
+  showNotebook?: boolean;
+};
+
+export function CoralCrowLogo({
+  className,
+  title = "코랄 까마귀",
+  showBackground = true,
+  showNotebook = true,
+}: CoralCrowLogoProps) {
+  const generatedId = useId();
+  const titleId = title ? `coral-crow-logo-${generatedId}` : undefined;
+
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 64 64"
+      role={title ? "img" : undefined}
+      aria-labelledby={titleId}
+      aria-hidden={title ? undefined : true}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {title && <title id={titleId}>{title}</title>}
+      {showBackground && <circle cx="32" cy="32" r="30" fill="#FFF2F0" />}
+      <path
+        d="M18.9 39.4c-3.8 2.4-6.9 6.4-8.2 11.3 6.1-.2 11.5-2.7 15-6.9l-6.8-4.4Z"
+        fill="#FF746F"
+      />
+      <path
+        d="M19.7 38.8c0-8.2 6.8-14.2 16.1-14.2 10.4 0 17.5 6.9 17.5 15.1 0 7.6-7.4 13.3-18.1 13.3-9.6 0-15.5-5.4-15.5-14.2Z"
+        fill="#FF746F"
+      />
+      <path
+        d="M26.6 27.5c0-7.7 6.1-13.6 14.2-13.6 7.5 0 12.8 5.2 12.8 12.1 0 7.5-5.9 13.1-14 13.1-7.7 0-13-4.7-13-11.6Z"
+        fill="#FF746F"
+      />
+      <path
+        d="M25.6 39.2c4-6.4 11.2-9.3 21.5-8.7-2.1 8.2-8.7 14.3-18.5 16.3-3.1.6-5.1-2.9-3-7.6Z"
+        fill="#E85F5A"
+        opacity="0.86"
+      />
+      <path d="M51.7 25.8l5.3 2.1-5.2 2.4c.7-1.5.7-3.1-.1-4.5Z" fill="#6F8796" />
+      <circle cx="42.7" cy="24.5" r="1.85" fill="#FFFFFF" />
+      <circle cx="43.3" cy="24.4" r="0.88" fill="#2D3135" />
+      <path d="M39.2 22.5c1.7-1 3.9-.9 5.6.3" fill="none" stroke="#2D3135" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M27.9 20.2c1.3-3.5 4.1-5.7 8-6.4-.6 4.1-3.3 6.6-8 6.4Z" fill="#FF746F" />
+      <path
+        d="M26.2 43.4c4.2.2 8.6-1.6 13.2-5.4-1.6 5.6-6.4 9.6-12.1 10.1-1.8.2-2.8-2.2-1.5-4l.4-.7Z"
+        fill="#B84843"
+        opacity="0.28"
+      />
+      {showNotebook && (
+        <>
+          <rect x="14.2" y="44.5" width="12.2" height="8.5" rx="2.3" fill="#FFFFFF" stroke="#E3E7EA" strokeWidth="1.4" />
+          <path d="M17.1 47.3h6.3M17.1 50.2h4.4" stroke="#6F8796" strokeWidth="1.35" strokeLinecap="round" />
+        </>
+      )}
+      <circle cx="48.8" cy="44.4" r="2.1" fill="#F2C14E" />
+      <path d="M53.2 14.5l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8.8-2.1Z" fill="#F2C14E" />
+      <path d="M14.8 24.1l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6.6-1.5Z" fill="#6F8796" />
+    </svg>
+  );
+}
