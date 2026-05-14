@@ -458,7 +458,6 @@ function HashRouter({
   const [recordModal, setRecordModal] = useState<RecordModalContext | null>(null);
   const [mappingTopic, setMappingTopic] = useState<MaterialTopic | null>(null);
   const [reviewSession, setReviewSession] = useState<ReviewSession | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [todayCompleteOpen, setTodayCompleteOpen] = useState(false);
@@ -580,12 +579,6 @@ function HashRouter({
             </button>
           ))}
         </nav>
-        <button className="secondary-button wide" onClick={() => setShareOpen(true)}>
-          공유하기
-        </button>
-        <button className="secondary-button wide" onClick={() => setSyncOpen(true)}>
-          동기화
-        </button>
         <button className="secondary-button wide" onClick={() => setSearchOpen(true)}>
           검색
         </button>
@@ -644,7 +637,6 @@ function HashRouter({
       )}
       {todayCompleteOpen && <TodayCompletionModal data={data} onClose={() => setTodayCompleteOpen(false)} />}
       {searchOpen && <SearchModal data={data} onClose={() => setSearchOpen(false)} />}
-      {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
       {syncOpen && (
         <SyncModal
           authSession={authSession}
@@ -3042,6 +3034,45 @@ function SettingsPage({
       <div className="settings-grid settings-layout">
         <div className="settings-static-column">
           <section className="panel">
+            <h2>클라우드 동기화</h2>
+            <p className="muted">
+              {authSession
+                ? `${authSession.user.email || "로그인 계정"}으로 Supabase에 연결되어 있습니다.`
+                : "로그인하면 컴퓨터와 휴대폰에서 같은 데이터를 수정할 수 있습니다."}
+            </p>
+            {syncMessage && <p className="muted">{syncMessage}</p>}
+            <div className="settings-action-row">
+              <button className="secondary-button" onClick={onOpenSync}>
+                {authSession ? "동기화 관리" : "로그인 / 회원가입"}
+              </button>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>백업</h2>
+            <p className="muted">공부 데이터를 파일로 저장하거나, 저장해둔 파일을 이 브라우저로 불러옵니다.</p>
+            <div className="settings-action-row">
+              <button className="secondary-button" onClick={exportBackup}>
+                파일 백업
+              </button>
+              <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
+                파일 불러오기
+              </button>
+              <input ref={fileInputRef} className="hidden-input" type="file" accept=".study" onChange={importBackup} />
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>앱 링크 공유</h2>
+            <p className="muted">앱 주소만 공유합니다. 공부 데이터 공유는 로그인 동기화나 백업 파일을 사용하세요.</p>
+            <div className="settings-action-row">
+              <button className="secondary-button" onClick={() => setShareOpen(true)}>
+                앱 링크 공유
+              </button>
+            </div>
+          </section>
+
+          <section className="panel">
             <h2>기록 복습 주기</h2>
             <p className="muted">이 기간 이상 보지 않은 복습 카드를 대시보드에 표시합니다.</p>
             <label className="field-label">
@@ -3062,35 +3093,6 @@ function SettingsPage({
                 }
               />
             </label>
-          </section>
-
-          <section className="panel">
-            <h2>백업</h2>
-            <div className="settings-action-row">
-              <button className="secondary-button" onClick={exportBackup}>
-                파일 백업
-              </button>
-              <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
-                파일 불러오기
-              </button>
-              <button className="secondary-button" onClick={() => setShareOpen(true)}>
-                링크 공유
-              </button>
-              <input ref={fileInputRef} className="hidden-input" type="file" accept=".study" onChange={importBackup} />
-            </div>
-          </section>
-
-          <section className="panel">
-            <h2>클라우드 동기화</h2>
-            <p className="muted">
-              {authSession ? `${authSession.user.email || "로그인 계정"}으로 Supabase에 연결되어 있습니다.` : "로그인하면 컴퓨터와 휴대폰에서 같은 데이터를 수정할 수 있습니다."}
-            </p>
-            {syncMessage && <p className="muted">{syncMessage}</p>}
-            <div className="settings-action-row">
-              <button className="secondary-button" onClick={onOpenSync}>
-                {authSession ? "동기화 관리" : "로그인 / 회원가입"}
-              </button>
-            </div>
           </section>
 
           <section className="panel">
@@ -5166,7 +5168,7 @@ function ShareModal({ onClose }: { onClose: () => void }) {
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-panel small-modal">
         <div className="modal-header">
-          <h2>공유하기</h2>
+          <h2>앱 링크 공유</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">
             ×
           </button>
@@ -5185,7 +5187,7 @@ function ShareModal({ onClose }: { onClose: () => void }) {
             확인
           </button>
           <button className="primary-button" onClick={shareLink}>
-            링크 공유
+            앱 링크 공유
           </button>
         </div>
       </div>
