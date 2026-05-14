@@ -1481,6 +1481,10 @@ summary {
   font-weight: 850;
 }
 
+.required-mark {
+  color: var(--coral-text);
+}
+
 .form-grid,
 .filter-grid {
   display: grid;

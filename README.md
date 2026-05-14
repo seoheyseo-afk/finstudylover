@@ -48,6 +48,7 @@ Supabase 동기화를 쓰려면 Vercel 프로젝트의 Environment Variables에 
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_INVITE_CODE`
 
 Supabase에는 `study_data` 테이블과 사용자별 RLS 정책이 필요합니다.
 
