@@ -5229,8 +5229,8 @@ function SearchModal({ data, onClose }: { data: StudyData; onClose: () => void }
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-panel search-modal">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="modal-panel search-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <h2>전체 검색</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">
