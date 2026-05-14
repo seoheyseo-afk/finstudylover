@@ -397,7 +397,7 @@ function App() {
   const handleSignOut = async () => {
     await clearAuthSession();
     setAuthSession(null);
-    setSyncMessage("로그아웃됨. 이 브라우저의 로컬 데이터는 유지됩니다.");
+    setSyncMessage("로그아웃됨. 이 브라우저의 로컬 데이터는 유지됩니다. 공용/외부 컴퓨터에서는 전체 초기화까지 실행하는 것이 안전합니다.");
   };
 
   if (loadError) {
