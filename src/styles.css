@@ -2815,6 +2815,14 @@ textarea::placeholder {
 }
 
 @media (max-width: 980px) {
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
   .app-layout {
     display: block;
   }
