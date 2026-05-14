@@ -2837,7 +2837,7 @@ textarea::placeholder {
     justify-content: space-between;
     gap: 12px;
     border-bottom: 1px solid rgb(255 255 255 / 24%);
-    padding: 12px 14px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 12px;
     background: #a5bdcc;
     backdrop-filter: blur(14px);
   }
