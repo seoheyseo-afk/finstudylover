@@ -8,16 +8,10 @@
   "theme_color": "#A5BDCC",
   "icons": [
     {
-      "src": "./coral-crow.svg",
+      "src": "./icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    },
-    {
-      "src": "./favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
     }
   ]
 }
