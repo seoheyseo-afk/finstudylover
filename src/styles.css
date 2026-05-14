@@ -2473,6 +2473,8 @@ textarea::placeholder {
 
 .sync-modal-description {
   margin-bottom: 8px;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .today-completion-modal {
