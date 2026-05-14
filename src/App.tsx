@@ -5155,15 +5155,12 @@ function SyncModal({
               />
             </label>
             <label className="field-label sync-modal-field">
-              <span>
-                초대코드 <span className="required-mark" aria-hidden="true">*</span>
-              </span>
+              초대코드
               <input
                 type="text"
                 autoComplete="off"
                 value={inviteCode}
                 onChange={(event) => setInviteCode(event.target.value)}
-                placeholder="회원가입할 때만 입력"
               />
             </label>
             {syncMessage && <p className="muted">{syncMessage}</p>}
