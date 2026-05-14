@@ -3088,6 +3088,77 @@ textarea::placeholder {
   .modal-panel {
     padding: 16px;
   }
+
+  .today-completion-header {
+    margin-bottom: 12px;
+  }
+
+  .today-completion-title-row {
+    grid-template-columns: 42px minmax(0, max-content) 42px;
+    gap: 8px;
+  }
+
+  .today-completion-title-bird {
+    width: 42px;
+    height: 42px;
+  }
+
+  .today-completion-header h2 {
+    font-size: 24px;
+  }
+
+  .today-completion-header p {
+    font-size: 16px;
+  }
+
+  .today-completion-table-wrap {
+    padding: 5px;
+  }
+
+  .today-completion-table {
+    width: max-content;
+    min-width: 0;
+    border-spacing: 4px;
+    font-size: 12px;
+  }
+
+  .today-completion-table th,
+  .today-completion-table td {
+    min-width: 46px;
+    height: 38px;
+    border-radius: 9px;
+    padding: 6px 5px;
+  }
+
+  .today-completion-table th {
+    max-width: 54px;
+    line-height: 1.12;
+    white-space: normal;
+    word-break: keep-all;
+  }
+
+  .today-completion-table th:first-child,
+  .today-completion-table td:first-child {
+    min-width: 54px;
+  }
+
+  .today-completion-table th:last-child,
+  .today-completion-table td:last-child {
+    min-width: 38px;
+  }
+
+  .completion-value,
+  .completion-zero-mark {
+    min-width: 20px;
+    min-height: 20px;
+    font-size: 13px;
+  }
+
+  .grand-total-value {
+    min-width: 26px;
+    min-height: 26px;
+    font-size: 15px;
+  }
 }
 
 @media (max-width: 430px) {
