@@ -134,6 +134,8 @@ type SyncPatch = {
   settings: boolean;
 };
 
+type PullRefreshStatus = "idle" | "pulling" | "ready" | "refreshing" | "done" | "error";
+
 const navItems = [
   { path: "dashboard", label: "대시보드" },
   { path: "subjects", label: "과목" },
@@ -232,6 +234,18 @@ function navigate(path: string) {
 
 function scrollPageToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function isInteractiveElement(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("button, input, select, textarea, summary, a, [role='button'], .modal-backdrop"));
+}
+
+function getPullRefreshLabel(status: PullRefreshStatus) {
+  if (status === "ready") return "놓으면 동기화";
+  if (status === "refreshing") return "동기화 중";
+  if (status === "done") return "동기화 완료";
+  if (status === "error") return "동기화 실패";
+  return "아래로 당겨 동기화";
 }
 
 function readSessionValue(key: string) {
@@ -355,6 +369,7 @@ function App() {
   const [loadError, setLoadError] = useState("");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [syncMessage, setSyncMessage] = useState("");
+  const [pullRefreshStatus, setPullRefreshStatus] = useState<PullRefreshStatus>("idle");
   const dataRef = useRef<StudyData | null>(null);
   const authSessionRef = useRef<AuthSession | null>(null);
   const cloudSyncRef = useRef<{ inFlight: boolean; pendingData: StudyData | null; pendingPatch: SyncPatch | null }>({
@@ -363,6 +378,7 @@ function App() {
     pendingPatch: null,
   });
   const autoCloudPullRef = useRef({ inFlight: false, lastPulledAt: 0 });
+  const pullRefreshRef = useRef({ active: false, ready: false, startY: 0, lastY: 0 });
 
   function rememberStudyData(next: StudyData | null) {
     dataRef.current = next;
@@ -596,6 +612,86 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const threshold = 76;
+    let resetTimer: number | undefined;
+
+    const canPullRefresh = (event: TouchEvent) =>
+      isSupabaseConfigured &&
+      getMediaQueryMatches(MOBILE_ZOOM_LOCK_QUERY) &&
+      authSessionRef.current &&
+      dataRef.current &&
+      window.scrollY <= 0 &&
+      !cloudSyncRef.current.inFlight &&
+      !cloudSyncRef.current.pendingData &&
+      !autoCloudPullRef.current.inFlight &&
+      !isInteractiveElement(event.target);
+
+    const resetPullRefresh = (delay = 0) => {
+      if (resetTimer) window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => {
+        setPullRefreshStatus("idle");
+      }, delay);
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || !canPullRefresh(event)) return;
+      const y = event.touches[0].clientY;
+      pullRefreshRef.current = { active: true, ready: false, startY: y, lastY: y };
+      setPullRefreshStatus("idle");
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const state = pullRefreshRef.current;
+      if (!state.active || event.touches.length !== 1) return;
+      const y = event.touches[0].clientY;
+      const distance = y - state.startY;
+      state.lastY = y;
+      if (distance <= 12) {
+        setPullRefreshStatus("idle");
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      const ready = distance >= threshold;
+      state.ready = ready;
+      setPullRefreshStatus(ready ? "ready" : "pulling");
+    };
+
+    const handleTouchEnd = () => {
+      const state = pullRefreshRef.current;
+      if (!state.active) return;
+      pullRefreshRef.current = { active: false, ready: false, startY: 0, lastY: 0 };
+      if (!state.ready) {
+        resetPullRefresh();
+        return;
+      }
+
+      setPullRefreshStatus("refreshing");
+      reloadCloudData({ silent: true, skipIfLocalChange: true })
+        .then(() => {
+          setPullRefreshStatus("done");
+          resetPullRefresh(850);
+        })
+        .catch((error) => {
+          console.error("Failed to pull refresh cloud data", error);
+          setPullRefreshStatus("error");
+          resetPullRefresh(1200);
+        });
+    };
+
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd);
+    document.addEventListener("touchcancel", handleTouchEnd);
+    return () => {
+      if (resetTimer) window.clearTimeout(resetTimer);
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, []);
+
   const handleSignOut = async () => {
     await clearAuthSession();
     rememberAuthSession(null);
@@ -626,18 +722,25 @@ function App() {
   }
 
   return (
-    <HashRouter
-      data={data}
-      updateData={updateData}
-      replaceData={replaceData}
-      authSession={authSession}
-      syncMessage={syncMessage}
-      onSignIn={handleSignIn}
-      onSignUp={handleSignUp}
-      onSignOut={handleSignOut}
-      onReloadCloud={handleReloadCloud}
-      onSaveCloud={handleSaveCloud}
-    />
+    <>
+      {pullRefreshStatus !== "idle" && (
+        <div className={`pull-refresh-indicator ${pullRefreshStatus}`} aria-live="polite">
+          {getPullRefreshLabel(pullRefreshStatus)}
+        </div>
+      )}
+      <HashRouter
+        data={data}
+        updateData={updateData}
+        replaceData={replaceData}
+        authSession={authSession}
+        syncMessage={syncMessage}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
+        onSignOut={handleSignOut}
+        onReloadCloud={handleReloadCloud}
+        onSaveCloud={handleSaveCloud}
+      />
+    </>
   );
 }
 

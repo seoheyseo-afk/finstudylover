@@ -267,6 +267,50 @@ a {
   stroke-width: 2.2;
 }
 
+.pull-refresh-indicator {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 40;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  transform: translateX(-50%);
+  border: 1px solid rgb(111 135 150 / 18%);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: var(--blue-gray);
+  background: rgb(255 252 251 / 94%);
+  box-shadow: 0 10px 24px rgb(45 49 53 / 12%);
+  font-size: 13px;
+  font-weight: 900;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+}
+
+.pull-refresh-indicator.ready,
+.pull-refresh-indicator.done {
+  border-color: rgb(255 116 111 / 30%);
+  color: var(--coral-text);
+  background: rgb(255 242 240 / 96%);
+}
+
+.pull-refresh-indicator.error {
+  border-color: #ffc4bf;
+  color: var(--coral-text);
+}
+
+.pull-refresh-indicator.refreshing::before {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--coral-soft);
+  border-top-color: var(--coral);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+  content: "";
+}
+
 .page-stack {
   display: grid;
   gap: 22px;
