@@ -2804,11 +2804,12 @@ textarea::placeholder {
 }
 
 .sync-modal-actions {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.sync-modal-actions button {
-  flex: 1 1 140px;
+.sync-modal-logout-button {
+  grid-column: 1 / -1;
 }
 
 .review-screen {

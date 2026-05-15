@@ -341,11 +341,18 @@ function App() {
   const [loadError, setLoadError] = useState("");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [syncMessage, setSyncMessage] = useState("");
+  const dataRef = useRef<StudyData | null>(null);
   const authSessionRef = useRef<AuthSession | null>(null);
   const cloudSyncRef = useRef<{ inFlight: boolean; pendingData: StudyData | null }>({
     inFlight: false,
     pendingData: null,
   });
+  const autoCloudPullRef = useRef({ inFlight: false, lastPulledAt: 0 });
+
+  function rememberStudyData(next: StudyData | null) {
+    dataRef.current = next;
+    setData(next);
+  }
 
   function rememberAuthSession(session: AuthSession | null) {
     authSessionRef.current = session;
@@ -371,13 +378,13 @@ function App() {
             if (cloudRow) {
               const cloudData = normalizeStudyData(cloudRow.data);
               const mergedData = stored ? mergeStudyData(cloudData, localData) : cloudData;
-              setData(mergedData);
+              rememberStudyData(mergedData);
               void saveStudyData(mergedData);
               if (stored) void saveCloudStudyData(session, mergedData);
               setSyncMessage(stored ? "클라우드 데이터와 이 브라우저 데이터를 병합함" : "클라우드 데이터와 연결됨");
               return;
             }
-            setData(localData);
+            rememberStudyData(localData);
             void saveStudyData(localData);
             void saveCloudStudyData(session, localData);
             setSyncMessage("이 브라우저 데이터를 클라우드에 올림");
@@ -391,11 +398,11 @@ function App() {
         }
 
         if (stored) {
-          setData(localData);
+          rememberStudyData(localData);
           void saveStudyData(localData);
           return;
         }
-        setData(localData);
+        rememberStudyData(localData);
         void saveStudyData(localData);
       })
       .catch((error) => {
@@ -432,7 +439,7 @@ function App() {
       const mergedData = cloudRow ? mergeStudyData(cloudRow.data, pendingData) : pendingData;
       await saveCloudStudyData(refreshed, mergedData);
       if (!syncState.pendingData) {
-        setData(mergedData);
+        rememberStudyData(mergedData);
         void saveStudyData(mergedData);
       }
     } catch (error) {
@@ -459,6 +466,7 @@ function App() {
     setData((current) => {
       if (!current) return current;
       const next = normalizeStudyData(updater(current));
+      dataRef.current = next;
       void saveStudyData(next).catch((error) => {
         console.error("Failed to save study data", error);
       });
@@ -469,7 +477,7 @@ function App() {
 
   const replaceData = (next: StudyData) => {
     const normalized = normalizeStudyData(next);
-    setData(normalized);
+    rememberStudyData(normalized);
     void saveStudyData(normalized);
     queueCloudSync(normalized);
   };
@@ -482,7 +490,7 @@ function App() {
     const cloudRow = await loadCloudStudyData(session);
     if (cloudRow) {
       const mergedData = mergeStudyData(cloudRow.data, data);
-      setData(mergedData);
+      rememberStudyData(mergedData);
       await saveStudyData(mergedData);
       await saveCloudStudyData(session, mergedData);
       setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
@@ -505,32 +513,73 @@ function App() {
     setSyncMessage("가입 후 현재 데이터를 클라우드에 올림");
   };
 
-  const handleReloadCloud = async () => {
-    if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
+  const reloadCloudData = async (options: { silent?: boolean; skipIfLocalChange?: boolean } = {}) => {
+    const currentData = dataRef.current;
+    if (!currentData) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
     const session = await getFreshAuthSession();
     const cloudRow = await loadCloudStudyData(session);
     if (!cloudRow) {
-      await saveCloudStudyData(session, data);
-      setSyncMessage("클라우드 데이터가 없어 현재 데이터를 저장함");
+      if (options.skipIfLocalChange && (cloudSyncRef.current.inFlight || cloudSyncRef.current.pendingData)) return;
+      await saveCloudStudyData(session, currentData);
+      if (!options.silent) setSyncMessage("클라우드 데이터가 없어 현재 데이터를 저장함");
       return;
     }
-    const mergedData = mergeStudyData(cloudRow.data, data);
-    setData(mergedData);
+    if (options.skipIfLocalChange && (cloudSyncRef.current.inFlight || cloudSyncRef.current.pendingData)) return;
+    const mergedData = mergeStudyData(cloudRow.data, currentData);
+    rememberStudyData(mergedData);
     await saveStudyData(mergedData);
     await saveCloudStudyData(session, mergedData);
-    setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
+    if (!options.silent) setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
+  };
+
+  const handleReloadCloud = async () => {
+    await reloadCloudData();
   };
 
   const handleSaveCloud = async () => {
-    if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
+    const currentData = dataRef.current;
+    if (!currentData) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
     const session = await getFreshAuthSession();
     const cloudRow = await loadCloudStudyData(session);
-    const mergedData = cloudRow ? mergeStudyData(cloudRow.data, data) : data;
+    const mergedData = cloudRow ? mergeStudyData(cloudRow.data, currentData) : currentData;
     await saveCloudStudyData(session, mergedData);
-    setData(mergedData);
+    rememberStudyData(mergedData);
     await saveStudyData(mergedData);
     setSyncMessage("현재 데이터와 클라우드 데이터를 병합해 저장함");
   };
+
+  const tryAutoReloadCloud = async () => {
+    if (!isSupabaseConfigured || !authSessionRef.current || !dataRef.current) return;
+    if (!getMediaQueryMatches(MOBILE_ZOOM_LOCK_QUERY)) return;
+    if (cloudSyncRef.current.inFlight || cloudSyncRef.current.pendingData || autoCloudPullRef.current.inFlight) return;
+    const now = Date.now();
+    if (now - autoCloudPullRef.current.lastPulledAt < 10_000) return;
+
+    autoCloudPullRef.current = { inFlight: true, lastPulledAt: now };
+    try {
+      await reloadCloudData({ silent: true, skipIfLocalChange: true });
+    } catch (error) {
+      console.error("Failed to auto reload cloud data", error);
+    } finally {
+      autoCloudPullRef.current.inFlight = false;
+    }
+  };
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void tryAutoReloadCloud();
+    };
+    const handleFocus = () => {
+      void tryAutoReloadCloud();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   const handleSignOut = async () => {
     await clearAuthSession();
@@ -5366,10 +5415,7 @@ function SyncModal({
               <button className="primary-button" onClick={saveCloud} disabled={submitting}>
                 현재 데이터 저장
               </button>
-              <button className="secondary-button" onClick={onClose}>
-                확인
-              </button>
-              <button className="danger-button" onClick={signOut} disabled={submitting}>
+              <button className="danger-button sync-modal-logout-button" onClick={signOut} disabled={submitting}>
                 로그아웃
               </button>
             </div>
