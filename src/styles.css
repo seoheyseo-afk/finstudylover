@@ -2803,6 +2803,14 @@ textarea::placeholder {
   margin-top: 18px;
 }
 
+.sync-modal-actions {
+  flex-wrap: wrap;
+}
+
+.sync-modal-actions button {
+  flex: 1 1 140px;
+}
+
 .review-screen {
   display: grid;
   min-height: calc(100dvh - 88px);

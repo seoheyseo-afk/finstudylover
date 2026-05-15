@@ -341,6 +341,16 @@ function App() {
   const [loadError, setLoadError] = useState("");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [syncMessage, setSyncMessage] = useState("");
+  const authSessionRef = useRef<AuthSession | null>(null);
+  const cloudSyncRef = useRef<{ inFlight: boolean; pendingData: StudyData | null }>({
+    inFlight: false,
+    pendingData: null,
+  });
+
+  function rememberAuthSession(session: AuthSession | null) {
+    authSessionRef.current = session;
+    setAuthSession(session);
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -354,7 +364,7 @@ function App() {
           try {
             const session = await refreshAuthSession(savedSession);
             if (!mounted) return;
-            setAuthSession(session);
+            rememberAuthSession(session);
             void saveAuthSession(session);
             const cloudRow = await loadCloudStudyData(session);
             if (!mounted) return;
@@ -395,6 +405,48 @@ function App() {
     };
   }, []);
 
+  const queueCloudSync = (next: StudyData) => {
+    if (!authSessionRef.current) return;
+    cloudSyncRef.current.pendingData = next;
+    void flushCloudSyncQueue();
+  };
+
+  const flushCloudSyncQueue = async () => {
+    const syncState = cloudSyncRef.current;
+    if (syncState.inFlight) return;
+    const session = authSessionRef.current;
+    const pendingData = syncState.pendingData;
+    if (!session || !pendingData) return;
+
+    syncState.inFlight = true;
+    syncState.pendingData = null;
+    try {
+      const refreshed = await refreshAuthSession(session);
+      if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
+        await saveAuthSession(refreshed);
+        rememberAuthSession(refreshed);
+      }
+      await saveCloudStudyData(refreshed, pendingData);
+    } catch (error) {
+      console.error("Failed to sync study data", error);
+      setSyncMessage("클라우드 저장 실패");
+    } finally {
+      syncState.inFlight = false;
+      if (syncState.pendingData && authSessionRef.current) void flushCloudSyncQueue();
+    }
+  };
+
+  const getFreshAuthSession = async () => {
+    const session = authSessionRef.current;
+    if (!session) throw new Error("로그인이 필요합니다.");
+    const refreshed = await refreshAuthSession(session);
+    if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
+      await saveAuthSession(refreshed);
+      rememberAuthSession(refreshed);
+    }
+    return refreshed;
+  };
+
   const updateData = (updater: (current: StudyData) => StudyData) => {
     setData((current) => {
       if (!current) return current;
@@ -402,9 +454,7 @@ function App() {
       void saveStudyData(next).catch((error) => {
         console.error("Failed to save study data", error);
       });
-      if (authSession) {
-        void syncStudyData(authSession, next);
-      }
+      queueCloudSync(next);
       return next;
     });
   };
@@ -413,30 +463,14 @@ function App() {
     const normalized = normalizeStudyData(next);
     setData(normalized);
     void saveStudyData(normalized);
-    if (authSession) {
-      void syncStudyData(authSession, normalized);
-    }
-  };
-
-  const syncStudyData = async (session: AuthSession, next: StudyData) => {
-    try {
-      const refreshed = await refreshAuthSession(session);
-      if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
-        await saveAuthSession(refreshed);
-        setAuthSession(refreshed);
-      }
-      await saveCloudStudyData(refreshed, next);
-    } catch (error) {
-      console.error("Failed to sync study data", error);
-      setSyncMessage("클라우드 저장 실패");
-    }
+    queueCloudSync(normalized);
   };
 
   const handleSignIn = async (email: string, password: string) => {
     if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
     const session = await signInWithPassword(email, password);
     await saveAuthSession(session);
-    setAuthSession(session);
+    rememberAuthSession(session);
     const cloudRow = await loadCloudStudyData(session);
     if (cloudRow) {
       const cloudData = normalizeStudyData(cloudRow.data);
@@ -457,14 +491,37 @@ function App() {
       return;
     }
     await saveAuthSession(session);
-    setAuthSession(session);
+    rememberAuthSession(session);
     await saveCloudStudyData(session, data);
     setSyncMessage("가입 후 현재 데이터를 클라우드에 올림");
   };
 
+  const handleReloadCloud = async () => {
+    if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
+    const session = await getFreshAuthSession();
+    const cloudRow = await loadCloudStudyData(session);
+    if (!cloudRow) {
+      await saveCloudStudyData(session, data);
+      setSyncMessage("클라우드 데이터가 없어 현재 데이터를 저장함");
+      return;
+    }
+    const cloudData = normalizeStudyData(cloudRow.data);
+    setData(cloudData);
+    await saveStudyData(cloudData);
+    setSyncMessage("클라우드 데이터 다시 불러옴");
+  };
+
+  const handleSaveCloud = async () => {
+    if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
+    const session = await getFreshAuthSession();
+    await saveCloudStudyData(session, data);
+    setSyncMessage("현재 데이터를 클라우드에 저장함");
+  };
+
   const handleSignOut = async () => {
     await clearAuthSession();
-    setAuthSession(null);
+    rememberAuthSession(null);
+    cloudSyncRef.current.pendingData = null;
     setSyncMessage("로그아웃됨. 이 브라우저의 로컬 데이터는 유지됩니다. 공용/외부 컴퓨터에서는 전체 초기화까지 실행하는 것이 안전합니다.");
   };
 
@@ -499,6 +556,8 @@ function App() {
       onSignIn={handleSignIn}
       onSignUp={handleSignUp}
       onSignOut={handleSignOut}
+      onReloadCloud={handleReloadCloud}
+      onSaveCloud={handleSaveCloud}
     />
   );
 }
@@ -512,6 +571,8 @@ function HashRouter({
   onSignIn,
   onSignUp,
   onSignOut,
+  onReloadCloud,
+  onSaveCloud,
 }: {
   data: StudyData;
   updateData: (updater: (current: StudyData) => StudyData) => void;
@@ -521,6 +582,8 @@ function HashRouter({
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
   onSignOut: () => Promise<void>;
+  onReloadCloud: () => Promise<void>;
+  onSaveCloud: () => Promise<void>;
 }) {
   const path = useHashPath();
   const [recordModal, setRecordModal] = useState<RecordModalContext | null>(null);
@@ -728,6 +791,8 @@ function HashRouter({
           onSignIn={onSignIn}
           onSignUp={onSignUp}
           onSignOut={onSignOut}
+          onReloadCloud={onReloadCloud}
+          onSaveCloud={onSaveCloud}
         />
       )}
     </div>
@@ -5172,6 +5237,8 @@ function SyncModal({
   onSignIn,
   onSignUp,
   onSignOut,
+  onReloadCloud,
+  onSaveCloud,
 }: {
   authSession: AuthSession | null;
   syncMessage: string;
@@ -5179,6 +5246,8 @@ function SyncModal({
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
   onSignOut: () => Promise<void>;
+  onReloadCloud: () => Promise<void>;
+  onSaveCloud: () => Promise<void>;
 }) {
   const [email, setEmail] = useState(authSession?.user.email || "");
   const [password, setPassword] = useState("");
@@ -5233,6 +5302,32 @@ function SyncModal({
     }
   };
 
+  const reloadCloud = async () => {
+    setSubmitting(true);
+    setStatus("");
+    try {
+      await onReloadCloud();
+      setStatus("클라우드 데이터를 다시 불러왔습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "클라우드 데이터를 불러오지 못했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const saveCloud = async () => {
+    setSubmitting(true);
+    setStatus("");
+    try {
+      await onSaveCloud();
+      setStatus("현재 데이터를 클라우드에 저장했습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "클라우드에 저장하지 못했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal-panel small-modal">
@@ -5250,7 +5345,13 @@ function SyncModal({
             <p>{authSession.user.email || "로그인 계정"}으로 연결되어 있습니다.</p>
             {syncMessage && <p className="muted">{syncMessage}</p>}
             {status && <p className="muted">{status}</p>}
-            <div className="modal-actions">
+            <div className="modal-actions sync-modal-actions">
+              <button className="secondary-button" onClick={reloadCloud} disabled={submitting}>
+                클라우드 불러오기
+              </button>
+              <button className="primary-button" onClick={saveCloud} disabled={submitting}>
+                현재 데이터 저장
+              </button>
               <button className="secondary-button" onClick={onClose}>
                 확인
               </button>
