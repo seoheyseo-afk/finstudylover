@@ -68,6 +68,7 @@ const SESSION_KEYS = {
   lastMaterialId: "geumgong:lastMaterialId",
   lastMaterialContextSubjectId: "geumgong:lastMaterialContextSubjectId",
   lastMaterialTopicId: "geumgong:lastMaterialTopicId",
+  focusMaterialTopicId: "geumgong:focusMaterialTopicId",
   recordFilters: "geumgong:recordFilters",
   recordScrollY: "geumgong:recordScrollY",
   focusRecordId: "geumgong:focusRecordId",
@@ -805,6 +806,7 @@ function Dashboard({
                   className="list-button dashboard-todo-row"
                   onClick={() => {
                     writeSessionValue(SESSION_KEYS.lastMaterialTopicId, item.nextTopic.id);
+                    writeSessionValue(SESSION_KEYS.focusMaterialTopicId, item.nextTopic.id);
                     navigate(`materials/${item.material.id}/${item.subject.id}`);
                   }}
                 >
@@ -957,6 +959,7 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
                   className="list-button"
                   onClick={() => {
                     writeSessionValue(SESSION_KEYS.lastMaterialTopicId, item.topic.id);
+                    writeSessionValue(SESSION_KEYS.focusMaterialTopicId, item.topic.id);
                     navigate(`materials/${item.material.id}/${item.subjectId}`);
                     onClose();
                   }}
@@ -1571,6 +1574,7 @@ function MaterialsPage({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"subjects" | "outline" | "manage">("subjects");
   const [focusedTopicId, setFocusedTopicId] = useState("");
+  const [pendingFocusTopicId, setPendingFocusTopicId] = useState(() => readSessionValue(SESSION_KEYS.focusMaterialTopicId));
   const restoredMaterialTopicRef = useRef("");
   const activeSubjectId = material && contextSubjectId && materialHasSubject(material, contextSubjectId) ? contextSubjectId : "";
 
@@ -1582,17 +1586,23 @@ function MaterialsPage({
     writeSessionValue(SESSION_KEYS.lastMaterialId, material.id);
     if (activeSubjectId) writeSessionValue(SESSION_KEYS.lastMaterialContextSubjectId, activeSubjectId);
     const lastTopicId = readSessionValue(SESSION_KEYS.lastMaterialTopicId);
-    if (!lastTopicId || !data.materialTopics.some((topic) => topic.id === lastTopicId && topic.materialId === material.id)) {
-      setFocusedTopicId("");
-      return;
+    const storedFocusTopicId = readSessionValue(SESSION_KEYS.focusMaterialTopicId);
+    const focusTopicId = pendingFocusTopicId || storedFocusTopicId;
+    const hasLastTopic = Boolean(lastTopicId && data.materialTopics.some((topic) => topic.id === lastTopicId && topic.materialId === material.id));
+    const hasFocusTopic = Boolean(focusTopicId && data.materialTopics.some((topic) => topic.id === focusTopicId && topic.materialId === material.id));
+    const scrollTopicId = hasFocusTopic ? focusTopicId : hasLastTopic ? lastTopicId : "";
+    if (storedFocusTopicId || pendingFocusTopicId) {
+      removeSessionValues([SESSION_KEYS.focusMaterialTopicId]);
+      setPendingFocusTopicId("");
     }
-    setFocusedTopicId(lastTopicId);
+    if (hasFocusTopic) setFocusedTopicId(focusTopicId);
+    if (!scrollTopicId) return;
     if (restoredMaterialTopicRef.current === material.id) return;
     restoredMaterialTopicRef.current = material.id;
     window.requestAnimationFrame(() => {
-      document.getElementById(`material-topic-${lastTopicId}`)?.scrollIntoView({ block: "center" });
+      document.getElementById(`material-topic-${scrollTopicId}`)?.scrollIntoView({ block: "center" });
     });
-  }, [activeSubjectId, data.materialTopics, material?.id]);
+  }, [activeSubjectId, data.materialTopics, material?.id, pendingFocusTopicId]);
 
   if (!material) {
     return (
@@ -1663,12 +1673,18 @@ function MaterialsPage({
       SESSION_KEYS.lastMaterialId,
       SESSION_KEYS.lastMaterialContextSubjectId,
       SESSION_KEYS.lastMaterialTopicId,
+      SESSION_KEYS.focusMaterialTopicId,
     ]);
     navigate("materials");
   };
 
   return (
-    <section className="page-stack">
+    <section
+      className="page-stack"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) setFocusedTopicId("");
+      }}
+    >
       <PageHeader
         eyebrow="자료"
         onBreadcrumbClick={goToMaterialList}
@@ -1799,7 +1815,12 @@ function MaterialsPage({
         </section>
       )}
 
-      <div className="material-topic-list">
+      <div
+        className="material-topic-list"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setFocusedTopicId("");
+        }}
+      >
         {topics.map((topic) => {
           const allMappedTopics = getMappedStandardTopics(data, topic.id);
           const mappedTopics = activeSubjectId
@@ -5515,6 +5536,7 @@ function buildSearchResults(data: StudyData, query: string): SearchResult[] {
       subtitle: material?.title || "자료",
       onOpen: () => {
         writeSessionValue(SESSION_KEYS.lastMaterialTopicId, topic.id);
+        writeSessionValue(SESSION_KEYS.focusMaterialTopicId, topic.id);
         navigate(`materials/${topic.materialId}`);
       },
     });
