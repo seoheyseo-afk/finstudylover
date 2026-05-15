@@ -1886,11 +1886,29 @@ summary {
 
 .progress-selector .status-chip {
   min-height: 34px;
-  opacity: 0.62;
+  border-color: var(--line);
+  color: var(--gray-text);
+  background: var(--gray);
 }
 
 .progress-selector .active {
-  opacity: 1;
+  border-color: #cbd5dc;
+  color: var(--gray-text);
+  background: var(--gray);
+  box-shadow: 0 0 0 3px rgb(111 135 150 / 12%);
+}
+
+.progress-selector .active.in-progress {
+  border-color: var(--coral-dark);
+  color: #fff;
+  background: var(--coral);
+  box-shadow: 0 0 0 3px rgb(255 116 111 / 12%);
+}
+
+.progress-selector .active.done {
+  border-color: #ffc4bf;
+  color: var(--coral-text);
+  background: var(--coral-soft);
   box-shadow: 0 0 0 3px rgb(255 116 111 / 12%);
 }
 
