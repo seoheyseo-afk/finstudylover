@@ -1570,16 +1570,24 @@ function MaterialsPage({
   const material = data.materials.find((item) => item.id === selectedMaterialId);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"subjects" | "outline" | "manage">("subjects");
+  const [focusedTopicId, setFocusedTopicId] = useState("");
   const restoredMaterialTopicRef = useRef("");
   const activeSubjectId = material && contextSubjectId && materialHasSubject(material, contextSubjectId) ? contextSubjectId : "";
 
   useEffect(() => {
-    if (!material) return;
+    if (!material) {
+      setFocusedTopicId("");
+      return;
+    }
     writeSessionValue(SESSION_KEYS.lastMaterialId, material.id);
     if (activeSubjectId) writeSessionValue(SESSION_KEYS.lastMaterialContextSubjectId, activeSubjectId);
-    if (restoredMaterialTopicRef.current === material.id) return;
     const lastTopicId = readSessionValue(SESSION_KEYS.lastMaterialTopicId);
-    if (!lastTopicId || !data.materialTopics.some((topic) => topic.id === lastTopicId && topic.materialId === material.id)) return;
+    if (!lastTopicId || !data.materialTopics.some((topic) => topic.id === lastTopicId && topic.materialId === material.id)) {
+      setFocusedTopicId("");
+      return;
+    }
+    setFocusedTopicId(lastTopicId);
+    if (restoredMaterialTopicRef.current === material.id) return;
     restoredMaterialTopicRef.current = material.id;
     window.requestAnimationFrame(() => {
       document.getElementById(`material-topic-${lastTopicId}`)?.scrollIntoView({ block: "center" });
@@ -1804,8 +1812,11 @@ function MaterialsPage({
             <article
               key={topic.id}
               id={`material-topic-${topic.id}`}
-              className="material-topic-row"
-              onClickCapture={() => writeSessionValue(SESSION_KEYS.lastMaterialTopicId, topic.id)}
+              className={focusedTopicId === topic.id ? "material-topic-row material-topic-row-focused" : "material-topic-row"}
+              onClickCapture={() => {
+                setFocusedTopicId(topic.id);
+                writeSessionValue(SESSION_KEYS.lastMaterialTopicId, topic.id);
+              }}
             >
               <div className="topic-main">
                 <strong>{formatOrder(topic.order, topic.title)}</strong>

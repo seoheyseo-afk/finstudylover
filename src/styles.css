@@ -2095,12 +2095,35 @@ summary {
 }
 
 .material-topic-row {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 14px;
   align-items: center;
   padding: 14px;
   background: #fff;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.material-topic-row-focused {
+  border-color: #ffc4bf;
+  background: linear-gradient(90deg, rgb(255 116 111 / 10%), #fff 46%);
+  box-shadow: var(--shadow), 0 0 0 3px rgb(255 116 111 / 10%);
+}
+
+.material-topic-row-focused::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: var(--coral);
+  content: "";
+  pointer-events: none;
 }
 
 .material-topic-record-list {
