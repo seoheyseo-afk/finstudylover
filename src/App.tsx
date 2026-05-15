@@ -185,12 +185,35 @@ function isRecordFilterCompactViewport() {
   return typeof window !== "undefined" && window.matchMedia(RECORD_FILTER_MOBILE_QUERY).matches;
 }
 
+function getMediaQueryMatches(query: string) {
+  return typeof window !== "undefined" && window.matchMedia(query).matches;
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => getMediaQueryMatches(query));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const media = window.matchMedia(query);
+    const syncMatches = () => setMatches(media.matches);
+    syncMatches();
+    media.addEventListener("change", syncMatches);
+    return () => media.removeEventListener("change", syncMatches);
+  }, [query]);
+
+  return matches;
+}
+
 function getHashPath() {
   return window.location.hash.replace(/^#\/?/, "") || "dashboard";
 }
 
 function navigate(path: string) {
   window.location.hash = `#/${path}`;
+}
+
+function scrollPageToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function readSessionValue(key: string) {
@@ -548,17 +571,29 @@ function HashRouter({
 
   const handleNavClick = (targetPath: string) => {
     if (targetPath === "subjects" && page === "subjects") {
-      removeSessionValues([SESSION_KEYS.lastSubjectId, SESSION_KEYS.lastTopicId]);
-      navigate("subjects");
+      if (segments.length > 1) {
+        removeSessionValues([SESSION_KEYS.lastSubjectId, SESSION_KEYS.lastTopicId]);
+        navigate("subjects");
+        return;
+      }
+      scrollPageToTop();
       return;
     }
     if (targetPath === "materials" && page === "materials") {
-      removeSessionValues([
-        SESSION_KEYS.lastMaterialId,
-        SESSION_KEYS.lastMaterialContextSubjectId,
-        SESSION_KEYS.lastMaterialTopicId,
-      ]);
-      navigate("materials");
+      if (segments.length > 1) {
+        removeSessionValues([
+          SESSION_KEYS.lastMaterialId,
+          SESSION_KEYS.lastMaterialContextSubjectId,
+          SESSION_KEYS.lastMaterialTopicId,
+        ]);
+        navigate("materials");
+        return;
+      }
+      scrollPageToTop();
+      return;
+    }
+    if (targetPath === page) {
+      scrollPageToTop();
       return;
     }
     navigate(getNavPath(targetPath, data));
@@ -671,7 +706,8 @@ function Dashboard({
   const dashboardSubjects = useMemo(() => data.subjects.filter(isSubjectVisibleOnDashboard), [data]);
   const [todoShuffleKey, setTodoShuffleKey] = useState(0);
   const todoItems = useMemo(() => getDashboardTodoItems(data, dashboardSubjects), [data, dashboardSubjects, todoShuffleKey]);
-  const primaryDDay = dashboardSubjects.length % 2 === 1 ? getPrimaryDDay(data) : undefined;
+  const isMobileDashboard = useMediaQuery(RECORD_FILTER_MOBILE_QUERY);
+  const primaryDDay = isMobileDashboard || dashboardSubjects.length % 2 === 1 ? getPrimaryDDay(data) : undefined;
 
   return (
     <section className="page-stack">
@@ -1241,14 +1277,14 @@ function SubjectsPage({
         meta={`${topics.length}개 표준목차 · ${subjectMaterialCount}개 연결 자료`}
         action={
           <div className="subject-action-stack">
-            <button className="danger-button" onClick={deleteSubject}>
-              과목 삭제
-            </button>
             <button
               className={settingsOpen ? "secondary-button active-action" : "secondary-button"}
               onClick={() => setSettingsOpen((open) => !open)}
             >
               과목 설정
+            </button>
+            <button className="danger-button" onClick={deleteSubject}>
+              과목 삭제
             </button>
           </div>
         }
@@ -1517,7 +1553,7 @@ function MaterialsPage({
           {data.materials.map((item) => (
             <button key={item.id} className="entity-card material-card" onClick={() => navigate(`materials/${item.id}`)}>
               <strong className="material-card-title">{item.title}</strong>
-              <span className="material-card-status">{item.statusLabel}</span>
+              <span className="material-card-status">{getMaterialCardMeta(data, item)}</span>
               <ProgressBar topics={data.materialTopics.filter((topic) => topic.materialId === item.id)} />
             </button>
           ))}
@@ -1591,14 +1627,14 @@ function MaterialsPage({
         meta={getMaterialDetailMeta(data, material)}
         action={
           <div className="subject-action-stack">
-            <button className="danger-button" onClick={deleteMaterial}>
-              자료 삭제
-            </button>
             <button
               className={settingsOpen ? "secondary-button active-action" : "secondary-button"}
               onClick={() => setSettingsOpen((open) => !open)}
             >
               자료 설정
+            </button>
+            <button className="danger-button" onClick={deleteMaterial}>
+              자료 삭제
             </button>
           </div>
         }
@@ -5252,7 +5288,9 @@ function SearchModal({ data, onClose }: { data: StudyData; onClose: () => void }
   const results = buildSearchResults(data, query).slice(0, 80);
 
   useEffect(() => {
-    window.requestAnimationFrame(() => inputRef.current?.focus());
+    const focusInput = () => inputRef.current?.focus({ preventScroll: true });
+    window.requestAnimationFrame(focusInput);
+    window.setTimeout(focusInput, 80);
   }, []);
 
   const openResult = (result: SearchResult) => {
@@ -5271,6 +5309,9 @@ function SearchModal({ data, onClose }: { data: StudyData; onClose: () => void }
         </div>
         <input
           ref={inputRef}
+          autoFocus
+          type="search"
+          inputMode="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="과목, 목차, 자료, 기록, 태그 검색"
@@ -5343,7 +5384,7 @@ function isRecordUncategorized(data: StudyData, record: StudyRecord) {
 }
 
 function normalizeSearchText(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  return value.trim().replace(/\s+/g, "").toLocaleLowerCase();
 }
 
 function includesSearch(haystack: Array<string | undefined>, needle: string) {
@@ -5801,6 +5842,17 @@ function getMaterialSubjectSummary(data: StudyData, material: Material) {
     .filter(Boolean);
   if (names.length === 0) return "연결 과목 없음";
   return names.length === 1 ? names[0] : `${names[0]} 외 ${names.length - 1}개`;
+}
+
+function getMaterialCardMeta(data: StudyData, material: Material) {
+  const subjectIds = getMaterialSubjectIds(material);
+  const subjectMeta =
+    subjectIds.length === 0
+      ? ""
+      : subjectIds.length === 1
+        ? getSubjectName(data, subjectIds[0])
+        : `${getSubjectName(data, subjectIds[0])} 외 ${subjectIds.length - 1}개`;
+  return [subjectMeta, material.statusLabel].filter(Boolean).join(" · ");
 }
 
 function getMaterialDetailMeta(data: StudyData, material: Material) {

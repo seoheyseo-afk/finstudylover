@@ -3168,6 +3168,34 @@ textarea::placeholder {
     flex: 1 1 140px;
   }
 
+  .page-header .subject-action-stack {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .material-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .material-card {
+    min-height: 148px;
+    padding: 13px;
+  }
+
+  .material-card-title {
+    min-height: 0;
+    font-size: 14px;
+    line-height: 1.35;
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+
+  .material-card-status {
+    font-size: 12px;
+    word-break: keep-all;
+  }
+
   .topic-row {
     grid-template-columns: 1fr;
   }
