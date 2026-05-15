@@ -120,6 +120,20 @@ const RECORD_TEMPLATES: Record<RecordType, string> = {
   일반메모: "메모:\n연결해서 볼 내용:",
 };
 
+type SyncPatch = {
+  subjects: Set<string>;
+  materials: Set<string>;
+  subjectMaterialSettings: Set<string>;
+  materialTopics: Set<string>;
+  standardTopics: Set<string>;
+  subtopics: Set<string>;
+  mappings: Set<string>;
+  records: Set<string>;
+  dDays: Set<string>;
+  todayCompletions: Set<string>;
+  settings: boolean;
+};
+
 const navItems = [
   { path: "dashboard", label: "대시보드" },
   { path: "subjects", label: "과목" },
@@ -343,9 +357,10 @@ function App() {
   const [syncMessage, setSyncMessage] = useState("");
   const dataRef = useRef<StudyData | null>(null);
   const authSessionRef = useRef<AuthSession | null>(null);
-  const cloudSyncRef = useRef<{ inFlight: boolean; pendingData: StudyData | null }>({
+  const cloudSyncRef = useRef<{ inFlight: boolean; pendingData: StudyData | null; pendingPatch: SyncPatch | null }>({
     inFlight: false,
     pendingData: null,
+    pendingPatch: null,
   });
   const autoCloudPullRef = useRef({ inFlight: false, lastPulledAt: 0 });
 
@@ -377,11 +392,10 @@ function App() {
             if (!mounted) return;
             if (cloudRow) {
               const cloudData = normalizeStudyData(cloudRow.data);
-              const mergedData = stored ? mergeStudyData(cloudData, localData, { conflictWinner: "cloud" }) : cloudData;
+              const mergedData = cloudData;
               rememberStudyData(mergedData);
               void saveStudyData(mergedData);
-              if (stored) void saveCloudStudyData(session, mergedData);
-              setSyncMessage(stored ? "클라우드 데이터와 이 브라우저 데이터를 병합함" : "클라우드 데이터와 연결됨");
+              setSyncMessage("클라우드 데이터와 연결됨");
               return;
             }
             rememberStudyData(localData);
@@ -414,9 +428,10 @@ function App() {
     };
   }, []);
 
-  const queueCloudSync = (next: StudyData) => {
+  const queueCloudSync = (next: StudyData, patch: SyncPatch) => {
     if (!authSessionRef.current) return;
     cloudSyncRef.current.pendingData = next;
+    cloudSyncRef.current.pendingPatch = mergeSyncPatches(cloudSyncRef.current.pendingPatch, patch);
     void flushCloudSyncQueue();
   };
 
@@ -425,10 +440,12 @@ function App() {
     if (syncState.inFlight) return;
     const session = authSessionRef.current;
     const pendingData = syncState.pendingData;
-    if (!session || !pendingData) return;
+    const pendingPatch = syncState.pendingPatch;
+    if (!session || !pendingData || !pendingPatch) return;
 
     syncState.inFlight = true;
     syncState.pendingData = null;
+    syncState.pendingPatch = null;
     try {
       const refreshed = await refreshAuthSession(session);
       if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
@@ -436,7 +453,7 @@ function App() {
         rememberAuthSession(refreshed);
       }
       const cloudRow = await loadCloudStudyData(refreshed);
-      const mergedData = cloudRow ? mergeStudyData(cloudRow.data, pendingData) : pendingData;
+      const mergedData = cloudRow ? mergeStudyDataWithPatch(cloudRow.data, pendingData, pendingPatch) : pendingData;
       await saveCloudStudyData(refreshed, mergedData);
       if (!syncState.pendingData) {
         rememberStudyData(mergedData);
@@ -447,7 +464,7 @@ function App() {
       setSyncMessage("클라우드 저장 실패");
     } finally {
       syncState.inFlight = false;
-      if (syncState.pendingData && authSessionRef.current) void flushCloudSyncQueue();
+      if (syncState.pendingData && syncState.pendingPatch && authSessionRef.current) void flushCloudSyncQueue();
     }
   };
 
@@ -466,11 +483,12 @@ function App() {
     setData((current) => {
       if (!current) return current;
       const next = normalizeStudyData(updater(current));
+      const patch = createSyncPatch(current, next);
       dataRef.current = next;
       void saveStudyData(next).catch((error) => {
         console.error("Failed to save study data", error);
       });
-      queueCloudSync(next);
+      queueCloudSync(next, patch);
       return next;
     });
   };
@@ -479,7 +497,7 @@ function App() {
     const normalized = normalizeStudyData(next);
     rememberStudyData(normalized);
     void saveStudyData(normalized);
-    queueCloudSync(normalized);
+    queueCloudSync(normalized, createFullSyncPatch(normalized));
   };
 
   const handleSignIn = async (email: string, password: string) => {
@@ -489,11 +507,10 @@ function App() {
     rememberAuthSession(session);
     const cloudRow = await loadCloudStudyData(session);
     if (cloudRow) {
-      const mergedData = mergeStudyData(cloudRow.data, data, { conflictWinner: "cloud" });
+      const mergedData = normalizeStudyData(cloudRow.data);
       rememberStudyData(mergedData);
       await saveStudyData(mergedData);
-      await saveCloudStudyData(session, mergedData);
-      setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
+      setSyncMessage("클라우드 데이터 불러옴");
       return;
     }
     await saveCloudStudyData(session, data);
@@ -525,9 +542,9 @@ function App() {
       return;
     }
     if (options.skipIfLocalChange && (cloudSyncRef.current.inFlight || cloudSyncRef.current.pendingData)) return;
-    const mergedData = mergeStudyData(cloudRow.data, currentData, { conflictWinner: "cloud" });
-    rememberStudyData(mergedData);
-    await saveStudyData(mergedData);
+    const cloudData = normalizeStudyData(cloudRow.data);
+    rememberStudyData(cloudData);
+    await saveStudyData(cloudData);
     if (!options.silent) setSyncMessage("클라우드 데이터 불러옴");
   };
 
@@ -539,12 +556,11 @@ function App() {
     const currentData = dataRef.current;
     if (!currentData) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
     const session = await getFreshAuthSession();
-    const cloudRow = await loadCloudStudyData(session);
-    const mergedData = cloudRow ? mergeStudyData(cloudRow.data, currentData, { conflictWinner: "local" }) : currentData;
-    await saveCloudStudyData(session, mergedData);
-    rememberStudyData(mergedData);
-    await saveStudyData(mergedData);
-    setSyncMessage("현재 데이터와 클라우드 데이터를 병합해 저장함");
+    const normalized = normalizeStudyData(currentData);
+    await saveCloudStudyData(session, normalized);
+    rememberStudyData(normalized);
+    await saveStudyData(normalized);
+    setSyncMessage("현재 데이터를 클라우드에 저장함");
   };
 
   const tryAutoReloadCloud = async () => {
@@ -584,6 +600,7 @@ function App() {
     await clearAuthSession();
     rememberAuthSession(null);
     cloudSyncRef.current.pendingData = null;
+    cloudSyncRef.current.pendingPatch = null;
     setSyncMessage("로그아웃됨. 이 브라우저의 로컬 데이터는 유지됩니다. 공용/외부 컴퓨터에서는 전체 초기화까지 실행하는 것이 안전합니다.");
   };
 
@@ -6488,50 +6505,100 @@ function getTimestamp(value?: string) {
   return Number.isFinite(time) ? time : 0;
 }
 
-type MergeConflictWinner = "latest" | "cloud" | "local";
-
-function mergeRowsById<T extends { id: string }>(cloudRows: T[], localRows: T[], conflictWinner: MergeConflictWinner = "local") {
-  const rows = new Map<string, T>();
-  cloudRows.forEach((row) => rows.set(row.id, row));
-  localRows.forEach((row) => {
-    if (conflictWinner === "cloud" && rows.has(row.id)) return;
-    rows.set(row.id, row);
-  });
-  return Array.from(rows.values());
+function createEmptySyncPatch(): SyncPatch {
+  return {
+    subjects: new Set(),
+    materials: new Set(),
+    subjectMaterialSettings: new Set(),
+    materialTopics: new Set(),
+    standardTopics: new Set(),
+    subtopics: new Set(),
+    mappings: new Set(),
+    records: new Set(),
+    dDays: new Set(),
+    todayCompletions: new Set(),
+    settings: false,
+  };
 }
 
-function mergeRowsByUpdatedAt<T extends { id: string; updatedAt?: string }>(
-  cloudRows: T[],
-  localRows: T[],
-  conflictWinner: MergeConflictWinner = "latest",
-) {
-  const rows = new Map<string, T>();
-  cloudRows.forEach((row) => rows.set(row.id, row));
-  localRows.forEach((row) => {
-    const existing = rows.get(row.id);
-    if (conflictWinner === "cloud" && existing) return;
-    if (conflictWinner === "local") {
-      rows.set(row.id, row);
+function mergeSyncPatches(current: SyncPatch | null, next: SyncPatch) {
+  if (!current) return next;
+  const merged = createEmptySyncPatch();
+  (Object.keys(merged) as Array<keyof SyncPatch>).forEach((key) => {
+    if (key === "settings") {
+      merged.settings = current.settings || next.settings;
       return;
     }
-    if (!existing || getTimestamp(row.updatedAt) >= getTimestamp(existing.updatedAt)) {
-      rows.set(row.id, row);
-    }
+    current[key].forEach((value) => merged[key].add(value));
+    next[key].forEach((value) => merged[key].add(value));
   });
-  return Array.from(rows.values());
+  return merged;
 }
 
-function mergeSubjectMaterialSettingsRows(
-  cloudRows: SubjectMaterialSetting[],
-  localRows: SubjectMaterialSetting[],
-  conflictWinner: MergeConflictWinner,
-) {
-  const rows = new Map<string, SubjectMaterialSetting>();
-  cloudRows.forEach((row) => rows.set(`${row.subjectId}:${row.materialId}`, row));
-  localRows.forEach((row) => {
-    const key = `${row.subjectId}:${row.materialId}`;
-    if (conflictWinner === "cloud" && rows.has(key)) return;
-    rows.set(key, row);
+function changedRowKeys<T>(beforeRows: T[], afterRows: T[], getKey: (row: T) => string) {
+  const before = new Map(beforeRows.map((row) => [getKey(row), JSON.stringify(row)]));
+  const after = new Map(afterRows.map((row) => [getKey(row), JSON.stringify(row)]));
+  const keys = new Set([...before.keys(), ...after.keys()]);
+  const changed = new Set<string>();
+  keys.forEach((key) => {
+    if (before.get(key) !== after.get(key)) changed.add(key);
+  });
+  return changed;
+}
+
+function subjectMaterialSettingKey(row: SubjectMaterialSetting) {
+  return `${row.subjectId}:${row.materialId}`;
+}
+
+function todayCompletionKey(row: TodayCompletionLog) {
+  return `${row.date}:${row.resourceChapterId}`;
+}
+
+function createSyncPatch(beforeValue: StudyData, afterValue: StudyData) {
+  const before = normalizeStudyData(beforeValue);
+  const after = normalizeStudyData(afterValue);
+  return {
+    subjects: changedRowKeys(before.subjects, after.subjects, (row) => row.id),
+    materials: changedRowKeys(before.materials, after.materials, (row) => row.id),
+    subjectMaterialSettings: changedRowKeys(before.subjectMaterialSettings, after.subjectMaterialSettings, subjectMaterialSettingKey),
+    materialTopics: changedRowKeys(before.materialTopics, after.materialTopics, (row) => row.id),
+    standardTopics: changedRowKeys(before.standardTopics, after.standardTopics, (row) => row.id),
+    subtopics: changedRowKeys(before.subtopics, after.subtopics, (row) => row.id),
+    mappings: changedRowKeys(before.mappings, after.mappings, (row) => row.id),
+    records: changedRowKeys(before.records, after.records, (row) => row.id),
+    dDays: changedRowKeys(before.dDays, after.dDays, (row) => row.id),
+    todayCompletions: changedRowKeys(before.todayCompletions, after.todayCompletions, todayCompletionKey),
+    settings: JSON.stringify(before.settings) !== JSON.stringify(after.settings),
+  };
+}
+
+function createFullSyncPatch(data: StudyData) {
+  const normalized = normalizeStudyData(data);
+  return {
+    subjects: new Set(normalized.subjects.map((row) => row.id)),
+    materials: new Set(normalized.materials.map((row) => row.id)),
+    subjectMaterialSettings: new Set(normalized.subjectMaterialSettings.map(subjectMaterialSettingKey)),
+    materialTopics: new Set(normalized.materialTopics.map((row) => row.id)),
+    standardTopics: new Set(normalized.standardTopics.map((row) => row.id)),
+    subtopics: new Set(normalized.subtopics.map((row) => row.id)),
+    mappings: new Set(normalized.mappings.map((row) => row.id)),
+    records: new Set(normalized.records.map((row) => row.id)),
+    dDays: new Set(normalized.dDays.map((row) => row.id)),
+    todayCompletions: new Set(normalized.todayCompletions.map(todayCompletionKey)),
+    settings: true,
+  };
+}
+
+function applyPatchedRows<T>(cloudRows: T[], localRows: T[], changedKeys: Set<string>, getKey: (row: T) => string) {
+  const rows = new Map(cloudRows.map((row) => [getKey(row), row]));
+  const local = new Map(localRows.map((row) => [getKey(row), row]));
+  changedKeys.forEach((key) => {
+    const localRow = local.get(key);
+    if (localRow) {
+      rows.set(key, localRow);
+    } else {
+      rows.delete(key);
+    }
   });
   return Array.from(rows.values());
 }
@@ -6543,59 +6610,31 @@ function normalizeMergedDDayPrimary(rows: DDayEvent[]) {
   return rows.map((row) => ({ ...row, isPrimary: primary ? row.id === primary.id : false }));
 }
 
-function mergeTodayCompletionRows(
-  cloudRows: TodayCompletionLog[],
-  localRows: TodayCompletionLog[],
-  materialTopics: MaterialTopic[],
-  conflictWinner: MergeConflictWinner,
-) {
-  const doneTopicIds = new Set(materialTopics.filter((topic) => topic.progress === "done").map((topic) => topic.id));
-  const rows = new Map<string, TodayCompletionLog>();
-  cloudRows.forEach((row) => {
-    const key = `${row.date}:${row.resourceChapterId}`;
-    rows.set(key, row);
-  });
-  localRows.forEach((row) => {
-    const key = `${row.date}:${row.resourceChapterId}`;
-    const existing = rows.get(key);
-    if (conflictWinner === "cloud" && existing) return;
-    if (conflictWinner === "local") {
-      rows.set(key, row);
-      return;
-    }
-    if (!existing || getTimestamp(row.completedAt) >= getTimestamp(existing.completedAt)) {
-      rows.set(key, row);
-    }
-  });
-  return Array.from(rows.values()).filter((row) => doneTopicIds.has(row.resourceChapterId));
-}
-
-function mergeStudyData(
-  cloudValue: StudyData,
-  localValue: StudyData,
-  options: { conflictWinner?: MergeConflictWinner } = {},
-) {
+function mergeStudyDataWithPatch(cloudValue: StudyData, localValue: StudyData, patch: SyncPatch) {
   const cloud = normalizeStudyData(cloudValue);
   const local = normalizeStudyData(localValue);
-  const conflictWinner = options.conflictWinner || "latest";
-  const materialTopics = mergeRowsByUpdatedAt(cloud.materialTopics, local.materialTopics, conflictWinner);
+  const materialTopics = applyPatchedRows(cloud.materialTopics, local.materialTopics, patch.materialTopics, (row) => row.id);
 
   return normalizeStudyData({
     ...cloud,
-    ...local,
     version: Math.max(cloud.version || 1, local.version || 1),
     initializedAt: cloud.initializedAt || local.initializedAt,
-    subjects: mergeRowsById(cloud.subjects, local.subjects, conflictWinner),
-    materials: mergeRowsById(cloud.materials, local.materials, conflictWinner),
-    subjectMaterialSettings: mergeSubjectMaterialSettingsRows(cloud.subjectMaterialSettings, local.subjectMaterialSettings, conflictWinner),
+    subjects: applyPatchedRows(cloud.subjects, local.subjects, patch.subjects, (row) => row.id),
+    materials: applyPatchedRows(cloud.materials, local.materials, patch.materials, (row) => row.id),
+    subjectMaterialSettings: applyPatchedRows(
+      cloud.subjectMaterialSettings,
+      local.subjectMaterialSettings,
+      patch.subjectMaterialSettings,
+      subjectMaterialSettingKey,
+    ),
     materialTopics,
-    standardTopics: mergeRowsById(cloud.standardTopics, local.standardTopics, conflictWinner),
-    subtopics: mergeRowsById(cloud.subtopics, local.subtopics, conflictWinner),
-    mappings: mergeRowsById(cloud.mappings, local.mappings, conflictWinner),
-    records: mergeRowsByUpdatedAt(cloud.records, local.records, conflictWinner),
-    dDays: normalizeMergedDDayPrimary(mergeRowsByUpdatedAt(cloud.dDays, local.dDays, conflictWinner)),
-    todayCompletions: mergeTodayCompletionRows(cloud.todayCompletions, local.todayCompletions, materialTopics, conflictWinner),
-    settings: conflictWinner === "cloud" ? { ...local.settings, ...cloud.settings } : { ...cloud.settings, ...local.settings },
+    standardTopics: applyPatchedRows(cloud.standardTopics, local.standardTopics, patch.standardTopics, (row) => row.id),
+    subtopics: applyPatchedRows(cloud.subtopics, local.subtopics, patch.subtopics, (row) => row.id),
+    mappings: applyPatchedRows(cloud.mappings, local.mappings, patch.mappings, (row) => row.id),
+    records: applyPatchedRows(cloud.records, local.records, patch.records, (row) => row.id),
+    dDays: normalizeMergedDDayPrimary(applyPatchedRows(cloud.dDays, local.dDays, patch.dDays, (row) => row.id)),
+    todayCompletions: applyPatchedRows(cloud.todayCompletions, local.todayCompletions, patch.todayCompletions, todayCompletionKey),
+    settings: patch.settings ? local.settings : cloud.settings,
   });
 }
 
