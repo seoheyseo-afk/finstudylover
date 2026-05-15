@@ -91,7 +91,12 @@ export async function loadCloudStudyData(session: AuthSession): Promise<StudyDat
   const response = await fetch(
     `${config.supabaseUrl}/rest/v1/study_data?select=data,updated_at&user_id=eq.${session.user.id}&limit=1`,
     {
-      headers: authHeaders(session.accessToken),
+      cache: "no-store",
+      headers: {
+        ...authHeaders(session.accessToken),
+        "cache-control": "no-cache",
+        pragma: "no-cache",
+      },
     },
   );
 
@@ -108,8 +113,11 @@ export async function saveCloudStudyData(session: AuthSession, data: StudyData) 
   const config = requireConfig();
   const response = await fetch(`${config.supabaseUrl}/rest/v1/study_data?on_conflict=user_id`, {
     method: "POST",
+    cache: "no-store",
     headers: {
       ...authHeaders(session.accessToken),
+      "cache-control": "no-cache",
+      pragma: "no-cache",
       prefer: "resolution=merge-duplicates,return=representation",
     },
     body: JSON.stringify({

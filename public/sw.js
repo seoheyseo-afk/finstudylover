@@ -1,4 +1,4 @@
-const CACHE_NAME = "geumgong-study-manager-v9";
+const CACHE_NAME = "geumgong-study-manager-v10";
 const APP_SHELL = [
   "./manifest.webmanifest",
   "./icon.svg",
@@ -25,6 +25,9 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
 
   const acceptHeader = event.request.headers.get("accept") || "";
   const isNavigation = event.request.mode === "navigate" || acceptHeader.includes("text/html");
