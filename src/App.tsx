@@ -377,7 +377,7 @@ function App() {
             if (!mounted) return;
             if (cloudRow) {
               const cloudData = normalizeStudyData(cloudRow.data);
-              const mergedData = stored ? mergeStudyData(cloudData, localData) : cloudData;
+              const mergedData = stored ? mergeStudyData(cloudData, localData, { conflictWinner: "cloud" }) : cloudData;
               rememberStudyData(mergedData);
               void saveStudyData(mergedData);
               if (stored) void saveCloudStudyData(session, mergedData);
@@ -489,7 +489,7 @@ function App() {
     rememberAuthSession(session);
     const cloudRow = await loadCloudStudyData(session);
     if (cloudRow) {
-      const mergedData = mergeStudyData(cloudRow.data, data);
+      const mergedData = mergeStudyData(cloudRow.data, data, { conflictWinner: "cloud" });
       rememberStudyData(mergedData);
       await saveStudyData(mergedData);
       await saveCloudStudyData(session, mergedData);
@@ -525,11 +525,10 @@ function App() {
       return;
     }
     if (options.skipIfLocalChange && (cloudSyncRef.current.inFlight || cloudSyncRef.current.pendingData)) return;
-    const mergedData = mergeStudyData(cloudRow.data, currentData);
+    const mergedData = mergeStudyData(cloudRow.data, currentData, { conflictWinner: "cloud" });
     rememberStudyData(mergedData);
     await saveStudyData(mergedData);
-    await saveCloudStudyData(session, mergedData);
-    if (!options.silent) setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
+    if (!options.silent) setSyncMessage("클라우드 데이터 불러옴");
   };
 
   const handleReloadCloud = async () => {
@@ -541,7 +540,7 @@ function App() {
     if (!currentData) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
     const session = await getFreshAuthSession();
     const cloudRow = await loadCloudStudyData(session);
-    const mergedData = cloudRow ? mergeStudyData(cloudRow.data, currentData) : currentData;
+    const mergedData = cloudRow ? mergeStudyData(cloudRow.data, currentData, { conflictWinner: "local" }) : currentData;
     await saveCloudStudyData(session, mergedData);
     rememberStudyData(mergedData);
     await saveStudyData(mergedData);
@@ -6489,18 +6488,32 @@ function getTimestamp(value?: string) {
   return Number.isFinite(time) ? time : 0;
 }
 
-function mergeRowsById<T extends { id: string }>(cloudRows: T[], localRows: T[]) {
+type MergeConflictWinner = "latest" | "cloud" | "local";
+
+function mergeRowsById<T extends { id: string }>(cloudRows: T[], localRows: T[], conflictWinner: MergeConflictWinner = "local") {
   const rows = new Map<string, T>();
   cloudRows.forEach((row) => rows.set(row.id, row));
-  localRows.forEach((row) => rows.set(row.id, row));
+  localRows.forEach((row) => {
+    if (conflictWinner === "cloud" && rows.has(row.id)) return;
+    rows.set(row.id, row);
+  });
   return Array.from(rows.values());
 }
 
-function mergeRowsByUpdatedAt<T extends { id: string; updatedAt?: string }>(cloudRows: T[], localRows: T[]) {
+function mergeRowsByUpdatedAt<T extends { id: string; updatedAt?: string }>(
+  cloudRows: T[],
+  localRows: T[],
+  conflictWinner: MergeConflictWinner = "latest",
+) {
   const rows = new Map<string, T>();
   cloudRows.forEach((row) => rows.set(row.id, row));
   localRows.forEach((row) => {
     const existing = rows.get(row.id);
+    if (conflictWinner === "cloud" && existing) return;
+    if (conflictWinner === "local") {
+      rows.set(row.id, row);
+      return;
+    }
     if (!existing || getTimestamp(row.updatedAt) >= getTimestamp(existing.updatedAt)) {
       rows.set(row.id, row);
     }
@@ -6508,10 +6521,18 @@ function mergeRowsByUpdatedAt<T extends { id: string; updatedAt?: string }>(clou
   return Array.from(rows.values());
 }
 
-function mergeSubjectMaterialSettingsRows(cloudRows: SubjectMaterialSetting[], localRows: SubjectMaterialSetting[]) {
+function mergeSubjectMaterialSettingsRows(
+  cloudRows: SubjectMaterialSetting[],
+  localRows: SubjectMaterialSetting[],
+  conflictWinner: MergeConflictWinner,
+) {
   const rows = new Map<string, SubjectMaterialSetting>();
   cloudRows.forEach((row) => rows.set(`${row.subjectId}:${row.materialId}`, row));
-  localRows.forEach((row) => rows.set(`${row.subjectId}:${row.materialId}`, row));
+  localRows.forEach((row) => {
+    const key = `${row.subjectId}:${row.materialId}`;
+    if (conflictWinner === "cloud" && rows.has(key)) return;
+    rows.set(key, row);
+  });
   return Array.from(rows.values());
 }
 
@@ -6522,12 +6543,26 @@ function normalizeMergedDDayPrimary(rows: DDayEvent[]) {
   return rows.map((row) => ({ ...row, isPrimary: primary ? row.id === primary.id : false }));
 }
 
-function mergeTodayCompletionRows(cloudRows: TodayCompletionLog[], localRows: TodayCompletionLog[], materialTopics: MaterialTopic[]) {
+function mergeTodayCompletionRows(
+  cloudRows: TodayCompletionLog[],
+  localRows: TodayCompletionLog[],
+  materialTopics: MaterialTopic[],
+  conflictWinner: MergeConflictWinner,
+) {
   const doneTopicIds = new Set(materialTopics.filter((topic) => topic.progress === "done").map((topic) => topic.id));
   const rows = new Map<string, TodayCompletionLog>();
-  [...cloudRows, ...localRows].forEach((row) => {
+  cloudRows.forEach((row) => {
+    const key = `${row.date}:${row.resourceChapterId}`;
+    rows.set(key, row);
+  });
+  localRows.forEach((row) => {
     const key = `${row.date}:${row.resourceChapterId}`;
     const existing = rows.get(key);
+    if (conflictWinner === "cloud" && existing) return;
+    if (conflictWinner === "local") {
+      rows.set(key, row);
+      return;
+    }
     if (!existing || getTimestamp(row.completedAt) >= getTimestamp(existing.completedAt)) {
       rows.set(key, row);
     }
@@ -6535,27 +6570,32 @@ function mergeTodayCompletionRows(cloudRows: TodayCompletionLog[], localRows: To
   return Array.from(rows.values()).filter((row) => doneTopicIds.has(row.resourceChapterId));
 }
 
-function mergeStudyData(cloudValue: StudyData, localValue: StudyData) {
+function mergeStudyData(
+  cloudValue: StudyData,
+  localValue: StudyData,
+  options: { conflictWinner?: MergeConflictWinner } = {},
+) {
   const cloud = normalizeStudyData(cloudValue);
   const local = normalizeStudyData(localValue);
-  const materialTopics = mergeRowsByUpdatedAt(cloud.materialTopics, local.materialTopics);
+  const conflictWinner = options.conflictWinner || "latest";
+  const materialTopics = mergeRowsByUpdatedAt(cloud.materialTopics, local.materialTopics, conflictWinner);
 
   return normalizeStudyData({
     ...cloud,
     ...local,
     version: Math.max(cloud.version || 1, local.version || 1),
     initializedAt: cloud.initializedAt || local.initializedAt,
-    subjects: mergeRowsById(cloud.subjects, local.subjects),
-    materials: mergeRowsById(cloud.materials, local.materials),
-    subjectMaterialSettings: mergeSubjectMaterialSettingsRows(cloud.subjectMaterialSettings, local.subjectMaterialSettings),
+    subjects: mergeRowsById(cloud.subjects, local.subjects, conflictWinner),
+    materials: mergeRowsById(cloud.materials, local.materials, conflictWinner),
+    subjectMaterialSettings: mergeSubjectMaterialSettingsRows(cloud.subjectMaterialSettings, local.subjectMaterialSettings, conflictWinner),
     materialTopics,
-    standardTopics: mergeRowsById(cloud.standardTopics, local.standardTopics),
-    subtopics: mergeRowsById(cloud.subtopics, local.subtopics),
-    mappings: mergeRowsById(cloud.mappings, local.mappings),
-    records: mergeRowsByUpdatedAt(cloud.records, local.records),
-    dDays: normalizeMergedDDayPrimary(mergeRowsByUpdatedAt(cloud.dDays, local.dDays)),
-    todayCompletions: mergeTodayCompletionRows(cloud.todayCompletions, local.todayCompletions, materialTopics),
-    settings: { ...cloud.settings, ...local.settings },
+    standardTopics: mergeRowsById(cloud.standardTopics, local.standardTopics, conflictWinner),
+    subtopics: mergeRowsById(cloud.subtopics, local.subtopics, conflictWinner),
+    mappings: mergeRowsById(cloud.mappings, local.mappings, conflictWinner),
+    records: mergeRowsByUpdatedAt(cloud.records, local.records, conflictWinner),
+    dDays: normalizeMergedDDayPrimary(mergeRowsByUpdatedAt(cloud.dDays, local.dDays, conflictWinner)),
+    todayCompletions: mergeTodayCompletionRows(cloud.todayCompletions, local.todayCompletions, materialTopics, conflictWinner),
+    settings: conflictWinner === "cloud" ? { ...local.settings, ...cloud.settings } : { ...cloud.settings, ...local.settings },
   });
 }
 
