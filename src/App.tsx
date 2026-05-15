@@ -370,9 +370,11 @@ function App() {
             if (!mounted) return;
             if (cloudRow) {
               const cloudData = normalizeStudyData(cloudRow.data);
-              setData(cloudData);
-              void saveStudyData(cloudData);
-              setSyncMessage("클라우드 데이터와 연결됨");
+              const mergedData = stored ? mergeStudyData(cloudData, localData) : cloudData;
+              setData(mergedData);
+              void saveStudyData(mergedData);
+              if (stored) void saveCloudStudyData(session, mergedData);
+              setSyncMessage(stored ? "클라우드 데이터와 이 브라우저 데이터를 병합함" : "클라우드 데이터와 연결됨");
               return;
             }
             setData(localData);
@@ -426,7 +428,13 @@ function App() {
         await saveAuthSession(refreshed);
         rememberAuthSession(refreshed);
       }
-      await saveCloudStudyData(refreshed, pendingData);
+      const cloudRow = await loadCloudStudyData(refreshed);
+      const mergedData = cloudRow ? mergeStudyData(cloudRow.data, pendingData) : pendingData;
+      await saveCloudStudyData(refreshed, mergedData);
+      if (!syncState.pendingData) {
+        setData(mergedData);
+        void saveStudyData(mergedData);
+      }
     } catch (error) {
       console.error("Failed to sync study data", error);
       setSyncMessage("클라우드 저장 실패");
@@ -473,10 +481,11 @@ function App() {
     rememberAuthSession(session);
     const cloudRow = await loadCloudStudyData(session);
     if (cloudRow) {
-      const cloudData = normalizeStudyData(cloudRow.data);
-      setData(cloudData);
-      await saveStudyData(cloudData);
-      setSyncMessage("클라우드 데이터 불러옴");
+      const mergedData = mergeStudyData(cloudRow.data, data);
+      setData(mergedData);
+      await saveStudyData(mergedData);
+      await saveCloudStudyData(session, mergedData);
+      setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
       return;
     }
     await saveCloudStudyData(session, data);
@@ -505,17 +514,22 @@ function App() {
       setSyncMessage("클라우드 데이터가 없어 현재 데이터를 저장함");
       return;
     }
-    const cloudData = normalizeStudyData(cloudRow.data);
-    setData(cloudData);
-    await saveStudyData(cloudData);
-    setSyncMessage("클라우드 데이터 다시 불러옴");
+    const mergedData = mergeStudyData(cloudRow.data, data);
+    setData(mergedData);
+    await saveStudyData(mergedData);
+    await saveCloudStudyData(session, mergedData);
+    setSyncMessage("클라우드 데이터와 현재 데이터를 병합함");
   };
 
   const handleSaveCloud = async () => {
     if (!data) throw new Error("학습 데이터가 아직 준비되지 않았습니다.");
     const session = await getFreshAuthSession();
-    await saveCloudStudyData(session, data);
-    setSyncMessage("현재 데이터를 클라우드에 저장함");
+    const cloudRow = await loadCloudStudyData(session);
+    const mergedData = cloudRow ? mergeStudyData(cloudRow.data, data) : data;
+    await saveCloudStudyData(session, mergedData);
+    setData(mergedData);
+    await saveStudyData(mergedData);
+    setSyncMessage("현재 데이터와 클라우드 데이터를 병합해 저장함");
   };
 
   const handleSignOut = async () => {
@@ -6422,6 +6436,81 @@ function groupBy<T>(items: T[], getKey: (item: T) => string) {
 
 function arraysEqual(a: string[], b: string[]) {
   return a.length === b.length && a.every((item, index) => item === b[index]);
+}
+
+function getTimestamp(value?: string) {
+  const time = value ? Date.parse(value) : 0;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function mergeRowsById<T extends { id: string }>(cloudRows: T[], localRows: T[]) {
+  const rows = new Map<string, T>();
+  cloudRows.forEach((row) => rows.set(row.id, row));
+  localRows.forEach((row) => rows.set(row.id, row));
+  return Array.from(rows.values());
+}
+
+function mergeRowsByUpdatedAt<T extends { id: string; updatedAt?: string }>(cloudRows: T[], localRows: T[]) {
+  const rows = new Map<string, T>();
+  cloudRows.forEach((row) => rows.set(row.id, row));
+  localRows.forEach((row) => {
+    const existing = rows.get(row.id);
+    if (!existing || getTimestamp(row.updatedAt) >= getTimestamp(existing.updatedAt)) {
+      rows.set(row.id, row);
+    }
+  });
+  return Array.from(rows.values());
+}
+
+function mergeSubjectMaterialSettingsRows(cloudRows: SubjectMaterialSetting[], localRows: SubjectMaterialSetting[]) {
+  const rows = new Map<string, SubjectMaterialSetting>();
+  cloudRows.forEach((row) => rows.set(`${row.subjectId}:${row.materialId}`, row));
+  localRows.forEach((row) => rows.set(`${row.subjectId}:${row.materialId}`, row));
+  return Array.from(rows.values());
+}
+
+function normalizeMergedDDayPrimary(rows: DDayEvent[]) {
+  const primary = rows
+    .filter((row) => row.isPrimary)
+    .sort((a, b) => getTimestamp(b.updatedAt) - getTimestamp(a.updatedAt))[0];
+  return rows.map((row) => ({ ...row, isPrimary: primary ? row.id === primary.id : false }));
+}
+
+function mergeTodayCompletionRows(cloudRows: TodayCompletionLog[], localRows: TodayCompletionLog[], materialTopics: MaterialTopic[]) {
+  const doneTopicIds = new Set(materialTopics.filter((topic) => topic.progress === "done").map((topic) => topic.id));
+  const rows = new Map<string, TodayCompletionLog>();
+  [...cloudRows, ...localRows].forEach((row) => {
+    const key = `${row.date}:${row.resourceChapterId}`;
+    const existing = rows.get(key);
+    if (!existing || getTimestamp(row.completedAt) >= getTimestamp(existing.completedAt)) {
+      rows.set(key, row);
+    }
+  });
+  return Array.from(rows.values()).filter((row) => doneTopicIds.has(row.resourceChapterId));
+}
+
+function mergeStudyData(cloudValue: StudyData, localValue: StudyData) {
+  const cloud = normalizeStudyData(cloudValue);
+  const local = normalizeStudyData(localValue);
+  const materialTopics = mergeRowsByUpdatedAt(cloud.materialTopics, local.materialTopics);
+
+  return normalizeStudyData({
+    ...cloud,
+    ...local,
+    version: Math.max(cloud.version || 1, local.version || 1),
+    initializedAt: cloud.initializedAt || local.initializedAt,
+    subjects: mergeRowsById(cloud.subjects, local.subjects),
+    materials: mergeRowsById(cloud.materials, local.materials),
+    subjectMaterialSettings: mergeSubjectMaterialSettingsRows(cloud.subjectMaterialSettings, local.subjectMaterialSettings),
+    materialTopics,
+    standardTopics: mergeRowsById(cloud.standardTopics, local.standardTopics),
+    subtopics: mergeRowsById(cloud.subtopics, local.subtopics),
+    mappings: mergeRowsById(cloud.mappings, local.mappings),
+    records: mergeRowsByUpdatedAt(cloud.records, local.records),
+    dDays: normalizeMergedDDayPrimary(mergeRowsByUpdatedAt(cloud.dDays, local.dDays)),
+    todayCompletions: mergeTodayCompletionRows(cloud.todayCompletions, local.todayCompletions, materialTopics),
+    settings: { ...cloud.settings, ...local.settings },
+  });
 }
 
 function isStudyData(value: unknown): value is StudyData {
