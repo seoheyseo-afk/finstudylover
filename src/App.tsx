@@ -76,6 +76,9 @@ const RECORD_DELETE_CONFIRM = "이 기록을 휴지통으로 이동할까요?";
 const PERMANENT_DELETE_CONFIRM = "이 기록을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.";
 const EMPTY_TRASH_CONFIRM = "휴지통의 기록을 모두 영구 삭제할까요?";
 const RECORD_FILTER_MOBILE_QUERY = "(max-width: 680px)";
+const MOBILE_ZOOM_LOCK_QUERY = "(max-width: 680px), (pointer: coarse)";
+const DEFAULT_VIEWPORT_CONTENT = "width=device-width, initial-scale=1.0, viewport-fit=cover";
+const MOBILE_LOCKED_VIEWPORT_CONTENT = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DASHBOARD_TODO_TARGET_COUNT = 9;
 const INVITE_CODE = import.meta.env.VITE_INVITE_CODE?.trim();
@@ -294,7 +297,45 @@ function useHashPath() {
   return path;
 }
 
+function useMobileZoomLock() {
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const originalViewportContent = viewport?.getAttribute("content") || DEFAULT_VIEWPORT_CONTENT;
+    const media = window.matchMedia(MOBILE_ZOOM_LOCK_QUERY);
+    const setViewportContent = () => {
+      viewport?.setAttribute("content", media.matches ? MOBILE_LOCKED_VIEWPORT_CONTENT : originalViewportContent);
+    };
+    const preventGestureZoom = (event: Event) => {
+      if (!media.matches || !event.cancelable) return;
+      event.preventDefault();
+    };
+    const preventPinchZoom = (event: TouchEvent) => {
+      if (!media.matches || event.touches.length < 2 || !event.cancelable) return;
+      event.preventDefault();
+    };
+
+    setViewportContent();
+    media.addEventListener("change", setViewportContent);
+    document.addEventListener("gesturestart", preventGestureZoom, { passive: false });
+    document.addEventListener("gesturechange", preventGestureZoom, { passive: false });
+    document.addEventListener("gestureend", preventGestureZoom, { passive: false });
+    document.addEventListener("touchmove", preventPinchZoom, { passive: false });
+
+    return () => {
+      media.removeEventListener("change", setViewportContent);
+      document.removeEventListener("gesturestart", preventGestureZoom);
+      document.removeEventListener("gesturechange", preventGestureZoom);
+      document.removeEventListener("gestureend", preventGestureZoom);
+      document.removeEventListener("touchmove", preventPinchZoom);
+      viewport?.setAttribute("content", originalViewportContent);
+    };
+  }, []);
+}
+
 function App() {
+  useMobileZoomLock();
+
   const [data, setData] = useState<StudyData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);

@@ -70,6 +70,14 @@ body {
   background: var(--bg);
 }
 
+@media (max-width: 680px), (pointer: coarse) {
+  html,
+  body,
+  #root {
+    touch-action: pan-x pan-y;
+  }
+}
+
 button,
 input,
 select,
