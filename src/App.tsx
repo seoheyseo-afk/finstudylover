@@ -1604,6 +1604,24 @@ function MaterialsPage({
     });
   }, [activeSubjectId, data.materialTopics, material?.id, pendingFocusTopicId]);
 
+  useEffect(() => {
+    if (!material || !focusedTopicId) return undefined;
+    const clearOnBackgroundClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const isClearSurface =
+        target === document.body ||
+        target === document.documentElement ||
+        target.classList.contains("app-layout") ||
+        target.classList.contains("main-content") ||
+        target.classList.contains("page-stack") ||
+        target.classList.contains("material-topic-list");
+      if (isClearSurface) setFocusedTopicId("");
+    };
+    document.addEventListener("pointerdown", clearOnBackgroundClick);
+    return () => document.removeEventListener("pointerdown", clearOnBackgroundClick);
+  }, [focusedTopicId, material]);
+
   if (!material) {
     return (
       <section className="page-stack">
