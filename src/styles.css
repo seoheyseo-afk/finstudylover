@@ -2707,6 +2707,14 @@ textarea::placeholder {
   font-weight: 900;
 }
 
+.today-completion-time-range {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
 .today-completion-table-wrap {
   overflow-x: auto;
   border-radius: 14px;
@@ -3419,6 +3427,10 @@ textarea::placeholder {
 
   .today-completion-header p {
     font-size: 16px;
+  }
+
+  .today-completion-time-range {
+    font-size: 12px;
   }
 
   .today-completion-table-wrap {

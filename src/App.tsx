@@ -1128,6 +1128,7 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
   const summary = getTodayCompletionSummary(data);
   const visibleRows = summary.rows.filter((row) => row.total > 0);
   const confettiPieces = summary.total > 0 ? Array.from({ length: 34 }, (_, index) => index) : [];
+  const timeRange = getTodayCompletionTimeRange(summary.items);
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
@@ -1150,6 +1151,7 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
             <div className="today-completion-title-copy">
               <h2>{formatKoreanMonthDay(getLocalDateKey())}</h2>
               <p>총 {summary.total}개 완료</p>
+              {timeRange && <span className="today-completion-time-range">시작 {timeRange.start} · 마무리 {timeRange.end}</span>}
             </div>
             <CoralCrowLogo
               className="today-completion-title-bird today-completion-title-bird-right"
@@ -6531,6 +6533,16 @@ function formatKoreanMonthDay(value: string) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
+function formatCompletionTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 type TodayCompletionSummaryItem = TodayCompletionLog & {
   subjectId: string;
   subjectName: string;
@@ -6587,6 +6599,18 @@ function getTodayCompletionSummary(data: StudyData) {
     rows,
     subjectTotals,
     items,
+  };
+}
+
+function getTodayCompletionTimeRange(items: TodayCompletionSummaryItem[]) {
+  const times = items
+    .map((item) => ({ raw: item.completedAt, time: Date.parse(item.completedAt) }))
+    .filter((item) => Number.isFinite(item.time))
+    .sort((a, b) => a.time - b.time);
+  if (times.length === 0) return null;
+  return {
+    start: formatCompletionTime(times[0].raw),
+    end: formatCompletionTime(times[times.length - 1].raw),
   };
 }
 
