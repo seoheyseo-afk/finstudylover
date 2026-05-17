@@ -1229,6 +1229,10 @@ details.settings-details > *:not(summary) {
   grid-template-columns: minmax(0, 1fr) 180px;
 }
 
+.dday-date-field {
+  width: min(180px, 100%);
+}
+
 .dday-option-row {
   display: flex;
   flex-wrap: wrap;
@@ -3351,6 +3355,35 @@ textarea::placeholder {
   .dday-form-grid,
   .dday-row {
     grid-template-columns: 1fr;
+  }
+
+  .dday-date-field {
+    width: min(168px, 100%);
+  }
+
+  .dday-option-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .dday-option-row .compact-toggle-row {
+    min-width: 0;
+    min-height: 36px;
+    gap: 5px;
+    padding: 0 7px;
+    font-size: 12px;
+  }
+
+  .dday-option-row .compact-toggle-row input {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+  }
+
+  .dday-option-row .compact-toggle-row span {
+    min-width: 0;
+    white-space: nowrap;
   }
 
   .dday-row-flags,

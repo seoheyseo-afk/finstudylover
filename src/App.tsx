@@ -3712,7 +3712,7 @@ function DDayManager({
                 placeholder="신용보증기금 필기"
               />
             </label>
-            <label className="field-label">
+            <label className="field-label dday-date-field">
               날짜
               <input
                 type="date"
