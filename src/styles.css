@@ -142,6 +142,16 @@ a {
   text-decoration: none;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .app-layout {
   display: grid;
   min-height: 100dvh;
@@ -2708,6 +2718,9 @@ textarea::placeholder {
 }
 
 .today-completion-time-range {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 850;
@@ -2843,7 +2856,38 @@ textarea::placeholder {
 }
 
 .today-completion-details {
-  margin-top: 14px;
+  margin-top: 8px;
+}
+
+.today-completion-details-toggle {
+  display: grid;
+  width: 34px;
+  min-height: 28px;
+  place-items: center;
+  margin: 0 auto;
+  border: 1px solid rgb(111 135 150 / 16%);
+  border-radius: 999px;
+  color: var(--blue-gray);
+  background: #fff;
+  cursor: pointer;
+  list-style: none;
+}
+
+.today-completion-details-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.today-completion-details-toggle::after {
+  width: 7px;
+  height: 7px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.today-completion-details[open] .today-completion-details-toggle::after {
+  transform: translateY(2px) rotate(-135deg);
 }
 
 .modal-header {

@@ -1151,7 +1151,6 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
             <div className="today-completion-title-copy">
               <h2>{formatKoreanMonthDay(getLocalDateKey())}</h2>
               <p>총 {summary.total}개 완료</p>
-              {timeRange && <span className="today-completion-time-range">시작 {timeRange.start} · 마무리 {timeRange.end}</span>}
             </div>
             <CoralCrowLogo
               className="today-completion-title-bird today-completion-title-bird-right"
@@ -1195,9 +1194,12 @@ function TodayCompletionModal({ data, onClose }: { data: StudyData; onClose: () 
             </tbody>
           </table>
         </div>
+        {timeRange && <div className="today-completion-time-range">시작 {timeRange.start} · 마무리 {timeRange.end}</div>}
 
         <details className="today-completion-details">
-          <summary>완료한 항목 보기</summary>
+          <summary className="today-completion-details-toggle" aria-label="완료한 항목 보기">
+            <span className="visually-hidden">완료한 항목 보기</span>
+          </summary>
           {summary.items.length === 0 ? (
             <EmptyText>오늘 완료한 자료목차가 없습니다.</EmptyText>
           ) : (
