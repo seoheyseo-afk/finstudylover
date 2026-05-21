@@ -1,4 +1,15 @@
-import { type ChangeEvent, type DragEvent, type FormEvent, type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+  type JSX,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createDefaultStudyData, mergeDefaultTemplate } from "./data/defaultData";
 import { CoralCrowLogo } from "./components/CoralCrowLogo";
 import { clearAuthSession, loadAuthSession, loadStudyData, saveAuthSession, saveStudyData, type AuthSession } from "./lib/idb";
@@ -78,6 +89,8 @@ const PERMANENT_DELETE_CONFIRM = "이 기록을 영구 삭제할까요? 이 작�
 const EMPTY_TRASH_CONFIRM = "휴지통의 기록을 모두 영구 삭제할까요?";
 const RECORD_FILTER_MOBILE_QUERY = "(max-width: 680px)";
 const MOBILE_ZOOM_LOCK_QUERY = "(max-width: 680px), (pointer: coarse)";
+const RICH_MATH_SELECTOR =
+  "math, .katex, .MathJax, [data-tex], [data-latex], script[type^='math/tex'], script[type='application/x-tex']";
 const DEFAULT_VIEWPORT_CONTENT = "width=device-width, initial-scale=1.0, viewport-fit=cover";
 const MOBILE_LOCKED_VIEWPORT_CONTENT = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -238,6 +251,125 @@ function scrollPageToTop() {
 
 function isInteractiveElement(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("button, input, select, textarea, summary, a, [role='button'], .modal-backdrop"));
+}
+
+function handleRichMathTextPaste(event: ClipboardEvent<HTMLTextAreaElement>, onChange: (value: string) => void) {
+  const text = getRichMathClipboardText(event.clipboardData);
+  if (!text) return;
+
+  event.preventDefault();
+  const textarea = event.currentTarget;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? start;
+  const nextValue = `${textarea.value.slice(0, start)}${text}${textarea.value.slice(end)}`;
+
+  onChange(nextValue);
+  window.requestAnimationFrame(() => {
+    textarea.selectionStart = start + text.length;
+    textarea.selectionEnd = start + text.length;
+  });
+}
+
+function getRichMathClipboardText(clipboardData: DataTransfer) {
+  const html = clipboardData.getData("text/html");
+  if (!html || typeof DOMParser === "undefined") return "";
+
+  const extracted = extractRichMathText(html);
+  if (extracted.formulaCount === 0 || !extracted.text) return "";
+
+  const plainText = clipboardData.getData("text/plain");
+  if (!plainText.trim()) return extracted.text;
+
+  return normalizePasteCompareText(plainText) === normalizePasteCompareText(extracted.text) ? "" : extracted.text;
+}
+
+function extractRichMathText(html: string) {
+  const document = new DOMParser().parseFromString(html, "text/html");
+  const body = document.body;
+  let formulaCount = 0;
+
+  Array.from(body.querySelectorAll(RICH_MATH_SELECTOR))
+    .filter((node) => !node.parentElement?.closest(RICH_MATH_SELECTOR))
+    .forEach((node) => {
+      const formula = extractFormulaText(node);
+      if (!formula) return;
+      formulaCount += 1;
+      node.replaceWith(document.createTextNode(` ${formula} `));
+    });
+
+  body.querySelectorAll("script, style, noscript").forEach((node) => node.remove());
+
+  return {
+    formulaCount,
+    text: normalizePastedMathText(body.textContent || ""),
+  };
+}
+
+function extractFormulaText(node: Element) {
+  const dataFormula = node.getAttribute("data-tex") || node.getAttribute("data-latex");
+  if (dataFormula) return normalizeFormulaText(dataFormula);
+
+  if (node.tagName.toLowerCase() === "script") {
+    return normalizeFormulaText(node.textContent || "");
+  }
+
+  const annotation = Array.from(node.querySelectorAll("annotation")).find((item) => {
+    const encoding = item.getAttribute("encoding")?.toLowerCase() || "";
+    return encoding.includes("tex") || encoding.includes("latex");
+  });
+  if (annotation?.textContent) return normalizeFormulaText(annotation.textContent);
+
+  const mathNode = node.matches("math") ? node : node.querySelector("math");
+  if (mathNode) {
+    const label = mathNode.getAttribute("alttext") || mathNode.getAttribute("aria-label");
+    return normalizeFormulaText(label || mathMlToText(mathNode));
+  }
+
+  const label = node.getAttribute("aria-label") || node.getAttribute("title");
+  return normalizeFormulaText(label || "");
+}
+
+function mathMlToText(node: Element): string {
+  const name = node.localName.toLowerCase();
+  const children = Array.from(node.children).filter((child) => !["annotation", "annotation-xml"].includes(child.localName.toLowerCase()));
+  const child = (index: number) => normalizeFormulaText(children[index] ? mathMlToText(children[index]) : "");
+  const joinedChildren = () => normalizeFormulaText(children.map(mathMlToText).join(""));
+
+  if (["mi", "mn", "mo", "mtext"].includes(name)) return normalizeFormulaText(node.textContent || "");
+  if (name === "semantics") return child(0);
+  if (["math", "mrow", "mstyle", "mpadded", "menclose"].includes(name)) return joinedChildren();
+  if (name === "mfrac") return `(${child(0)})/(${child(1)})`;
+  if (name === "msqrt") return `√(${joinedChildren()})`;
+  if (name === "mroot") return `${formatMathScript(child(1))}√(${child(0)})`;
+  if (name === "msub") return `${child(0)}_${formatMathScript(child(1))}`;
+  if (name === "msup") return `${child(0)}^${formatMathScript(child(1))}`;
+  if (name === "msubsup") return `${child(0)}_${formatMathScript(child(1))}^${formatMathScript(child(2))}`;
+  if (name === "munder") return `${child(0)}_${formatMathScript(child(1))}`;
+  if (name === "mover") return `${child(0)}^${formatMathScript(child(1))}`;
+  if (name === "munderover") return `${child(0)}_${formatMathScript(child(1))}^${formatMathScript(child(2))}`;
+
+  return children.length > 0 ? joinedChildren() : normalizeFormulaText(node.textContent || "");
+}
+
+function formatMathScript(value: string) {
+  if (!value) return "{}";
+  return value.length === 1 || (value.startsWith("{") && value.endsWith("}")) ? value : `{${value}}`;
+}
+
+function normalizeFormulaText(value: string) {
+  return value.replace(/[\u200b-\u200d\ufeff]/g, "").replace(/\u00a0/g, " ").trim();
+}
+
+function normalizePastedMathText(value: string) {
+  return normalizeFormulaText(value)
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function normalizePasteCompareText(value: string) {
+  return normalizeFormulaText(value).replace(/\s+/g, "");
 }
 
 function getPullRefreshLabel(status: PullRefreshStatus) {
@@ -4162,7 +4294,13 @@ function RecordModal({
           />
           <label className="field-label wide-field">
             내용
-            <textarea value={form.content} onChange={(event) => setField("content", event.target.value)} rows={7} />
+            <textarea
+              className="math-text-input"
+              value={form.content}
+              onChange={(event) => setField("content", event.target.value)}
+              onPaste={(event) => handleRichMathTextPaste(event, (value) => setField("content", value))}
+              rows={7}
+            />
           </label>
           <label className="check-row wide-field">
             <input

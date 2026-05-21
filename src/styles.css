@@ -111,6 +111,14 @@ textarea {
   line-height: 1.55;
 }
 
+.math-text-input,
+.record-content,
+.review-content {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Cambria Math", "STIX Two Math",
+    "Noto Sans Math", "Noto Sans Symbols 2", sans-serif;
+}
+
 input:focus,
 select:focus,
 textarea:focus {
