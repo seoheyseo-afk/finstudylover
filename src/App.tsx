@@ -76,6 +76,7 @@ const DEFAULT_MATERIAL_CATEGORY_BY_ID: Record<string, MaterialCategory> = {
 const SESSION_KEYS = {
   lastSubjectId: "geumgong:lastSubjectId",
   lastTopicId: "geumgong:lastTopicId",
+  lastSubjectDetailTab: "geumgong:lastSubjectDetailTab",
   lastMaterialId: "geumgong:lastMaterialId",
   lastMaterialContextSubjectId: "geumgong:lastMaterialContextSubjectId",
   lastMaterialTopicId: "geumgong:lastMaterialTopicId",
@@ -432,6 +433,10 @@ function getRememberedSubjectPath(data: StudyData) {
     return `subjects/${subjectId}/topics/${topicId}`;
   }
   return `subjects/${subjectId}`;
+}
+
+function getRememberedSubjectDetailTab(): "topics" | "records" {
+  return readSessionValue(SESSION_KEYS.lastSubjectDetailTab) === "records" ? "records" : "topics";
 }
 
 function getRememberedMaterialPath(data: StudyData) {
@@ -994,7 +999,7 @@ function HashRouter({
   const handleNavClick = (targetPath: string) => {
     if (targetPath === "subjects" && page === "subjects") {
       if (segments.length > 1) {
-        removeSessionValues([SESSION_KEYS.lastSubjectId, SESSION_KEYS.lastTopicId]);
+        removeSessionValues([SESSION_KEYS.lastSubjectId, SESSION_KEYS.lastTopicId, SESSION_KEYS.lastSubjectDetailTab]);
         navigate("subjects");
         return;
       }
@@ -1540,9 +1545,14 @@ function SubjectsPage({
   const [newSubjectName, setNewSubjectName] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"chips" | "outline" | "manage">("chips");
-  const [subjectDetailTab, setSubjectDetailTab] = useState<"topics" | "records">("topics");
+  const [subjectDetailTab, setSubjectDetailTabState] = useState<"topics" | "records">(getRememberedSubjectDetailTab);
   const [draggingSubjectId, setDraggingSubjectId] = useState("");
   const [targetSubjectId, setTargetSubjectId] = useState("");
+
+  const setSubjectDetailTab = (tab: "topics" | "records") => {
+    setSubjectDetailTabState(tab);
+    writeSessionValue(SESSION_KEYS.lastSubjectDetailTab, tab);
+  };
 
   useEffect(() => {
     if (!subject) return;
@@ -1551,6 +1561,11 @@ function SubjectsPage({
       writeSessionValue(SESSION_KEYS.lastTopicId, selectedTopicId);
     }
   }, [data.standardTopics, selectedTopicId, subject?.id]);
+
+  useEffect(() => {
+    if (subject) return;
+    setSubjectDetailTabState("topics");
+  }, [subject?.id]);
 
   if (!subject) {
     const addSubject = (event: FormEvent) => {
@@ -1647,7 +1662,8 @@ function SubjectsPage({
   const groupedTopics = groupBy(topics, (topic) => topic.group);
   const subjectMaterialCount = data.materials.filter((material) => materialHasSubject(material, subject.id)).length;
   const goToSubjectList = () => {
-    removeSessionValues([SESSION_KEYS.lastSubjectId, SESSION_KEYS.lastTopicId]);
+    removeSessionValues([SESSION_KEYS.lastSubjectId, SESSION_KEYS.lastTopicId, SESSION_KEYS.lastSubjectDetailTab]);
+    setSubjectDetailTabState("topics");
     navigate("subjects");
   };
 
