@@ -2482,6 +2482,25 @@ summary {
   display: block;
 }
 
+.accounting-entry-input,
+.accounting-entry-content {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.accounting-entry-input {
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.accounting-entry-content {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  white-space: pre;
+  word-break: normal;
+}
+
 .record-expand-button {
   margin-top: 6px;
   padding: 0;

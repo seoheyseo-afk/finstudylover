@@ -117,6 +117,7 @@ const REVIEW_CARD_DEFAULT_BY_TYPE: Record<RecordType, boolean> = {
   일반메모: false,
   오답: true,
   헷갈림: true,
+  회계처리: true,
   암기사항: true,
   GPT링크: false,
   주의사항: true,
@@ -126,6 +127,8 @@ const REVIEW_CARD_DEFAULT_BY_TYPE: Record<RecordType, boolean> = {
 const RECORD_TEMPLATES: Record<RecordType, string> = {
   오답: "틀린 이유:\n정답 포인트:\n다음에 볼 때 체크할 것:",
   헷갈림: "헷갈린 개념:\n구분 기준:\n예시:\n한 줄 정리:",
+  회계처리:
+    "거래/상황:\n\n차변                         | 대변\n계정과목 / 금액              | 계정과목 / 금액\n-----------------------------|-----------------------------\n                              |\n                              |\n\n근거:\n주의할 점:",
   암기사항: "외울 내용:\n조건:\n예외:\n한 줄 암기 포인트:",
   GPT링크: "질문한 내용:\n핵심 답변:\n다시 볼 포인트:\n링크:",
   주의사항: "주의할 조건:\n실수하기 쉬운 부분:\n체크포인트:",
@@ -4296,10 +4299,11 @@ function RecordModal({
           <label className="field-label wide-field">
             내용
             <textarea
-              className="math-text-input"
+              className={form.type === "회계처리" ? "math-text-input accounting-entry-input" : "math-text-input"}
               value={form.content}
               onChange={(event) => setField("content", event.target.value)}
               onPaste={(event) => handleRichMathTextPaste(event, (value) => setField("content", value))}
+              wrap={form.type === "회계처리" ? "off" : undefined}
               rows={7}
             />
           </label>
@@ -4543,7 +4547,13 @@ function ReviewPage({
         <p className="eyebrow">{current.type}</p>
         <h1>{current.title}</h1>
         <RecordMeta data={data} record={current} />
-        {showContent ? <p className="review-content">{current.content || "내용 없음"}</p> : <p className="review-placeholder">스페이스바 또는 내용 보기</p>}
+        {showContent ? (
+          <p className={current.type === "회계처리" ? "review-content accounting-entry-content" : "review-content"}>
+            {current.content || "내용 없음"}
+          </p>
+        ) : (
+          <p className="review-placeholder">스페이스바 또는 내용 보기</p>
+        )}
         {current.link && (
           <a className="attached-link" href={current.link} target="_blank" rel="noreferrer">
             <LinkIcon />
@@ -5268,7 +5278,7 @@ function TrashRecordList({
             </div>
           </div>
           <h3>{record.title}</h3>
-          <RecordContentPreview content={record.content} />
+          <RecordContentPreview content={record.content} type={record.type} />
           {record.tags && record.tags.length > 0 && <TagChipRow tags={record.tags} />}
           <RecordMeta data={data} record={record} />
           {record.deletedAt && <p className="muted">삭제일 {new Date(record.deletedAt).toLocaleString()}</p>}
@@ -5334,7 +5344,7 @@ function RecordList({
             </div>
           </div>
           <h3>{record.title}</h3>
-          <RecordContentPreview content={record.content} />
+          <RecordContentPreview content={record.content} type={record.type} />
           {record.tags && record.tags.length > 0 && <TagChipRow tags={record.tags} />}
           <RecordMeta data={data} record={record} />
         </article>
@@ -5372,17 +5382,21 @@ function LinkIcon() {
   );
 }
 
-function RecordContentPreview({ content }: { content: string }) {
+function RecordContentPreview({ content, type }: { content: string; type: RecordType }) {
   const [expanded, setExpanded] = useState(false);
   const normalizedContent = content || "내용 없음";
   const lineCount = normalizedContent.split(/\r\n|\r|\n/).length;
   const hasMore = content.length > 220 || lineCount > 4;
+  const contentClassName = [
+    expanded || !hasMore ? "record-content expanded" : "record-content preview",
+    type === "회계처리" ? "accounting-entry-content" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div>
-      <p className={expanded || !hasMore ? "record-content expanded" : "record-content preview"}>
-        {normalizedContent}
-      </p>
+      <p className={contentClassName}>{normalizedContent}</p>
       {hasMore && (
         <button
           type="button"
