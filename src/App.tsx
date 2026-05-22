@@ -115,20 +115,18 @@ const DEFAULT_RECORD_TAGS = [
 ];
 
 type AccountingEntryParts = {
-  summary: string;
+  memo: string;
   debit: string;
   credit: string;
-  basis: string;
-  caution: string;
 };
 
 const EMPTY_ACCOUNTING_ENTRY: AccountingEntryParts = {
-  summary: "",
+  memo: "",
   debit: "",
   credit: "",
-  basis: "",
-  caution: "",
 };
+
+const ACCOUNTING_ENTRY_MEMO_PLACEHOLDER = "거래/상황:\n근거:\n주의할 점:";
 
 const REVIEW_CARD_DEFAULT_BY_TYPE: Record<RecordType, boolean> = {
   일반메모: false,
@@ -393,45 +391,72 @@ function normalizePasteCompareText(value: string) {
 
 function formatAccountingEntryContent(parts: AccountingEntryParts) {
   return [
-    "거래/상황:",
-    parts.summary.trimEnd(),
-    "",
+    "메모:",
+    parts.memo,
     "차변:",
-    parts.debit.trimEnd(),
-    "",
+    parts.debit,
     "대변:",
-    parts.credit.trimEnd(),
-    "",
-    "근거:",
-    parts.basis.trimEnd(),
-    "주의할 점:",
-    parts.caution.trimEnd(),
+    parts.credit,
   ].join("\n");
 }
 
 function parseAccountingEntryContent(value: string): AccountingEntryParts {
-  const content = value.trimEnd();
+  const content = value;
   if (!content.trim()) return { ...EMPTY_ACCOUNTING_ENTRY };
 
   const oldTable = parseOldTableAccountingEntryContent(content);
   if (oldTable && (oldTable.debit || oldTable.credit)) return oldTable;
 
-  const labeled = parseLabeledAccountingEntryContent(content);
-  if (labeled) return labeled;
+  const currentLabeled = parseCurrentAccountingEntryContent(content);
+  if (currentLabeled) return currentLabeled;
 
-  return { ...EMPTY_ACCOUNTING_ENTRY, summary: content };
+  const legacyLabeled = parseLegacyAccountingEntryContent(content);
+  if (legacyLabeled) return legacyLabeled;
+
+  return { ...EMPTY_ACCOUNTING_ENTRY, memo: content };
 }
 
-function parseLabeledAccountingEntryContent(value: string): AccountingEntryParts | null {
+function parseCurrentAccountingEntryContent(value: string): AccountingEntryParts | null {
   const sections: AccountingEntryParts = { ...EMPTY_ACCOUNTING_ENTRY };
   const labelToKey: Record<string, keyof AccountingEntryParts> = {
+    메모: "memo",
+    차변: "debit",
+    대변: "credit",
+  };
+  let currentKey: keyof AccountingEntryParts | null = null;
+  let matched = false;
+
+  value.split(/\r\n|\r|\n/).forEach((line) => {
+    const match = line.match(/^(메모|차변|대변):\s*(.*)$/);
+    if (match) {
+      currentKey = labelToKey[match[1]];
+      sections[currentKey] = appendAccountingEntryLine(sections[currentKey], match[2]);
+      matched = true;
+      return;
+    }
+    if (currentKey) {
+      sections[currentKey] = appendAccountingEntryLine(sections[currentKey], line);
+    }
+  });
+
+  return matched ? sections : null;
+}
+
+function parseLegacyAccountingEntryContent(value: string): AccountingEntryParts | null {
+  const sections: AccountingEntryParts & { summary: string; basis: string; caution: string } = {
+    ...EMPTY_ACCOUNTING_ENTRY,
+    summary: "",
+    basis: "",
+    caution: "",
+  };
+  const labelToKey: Record<string, keyof typeof sections> = {
     "거래/상황": "summary",
     차변: "debit",
     대변: "credit",
     근거: "basis",
     "주의할 점": "caution",
   };
-  let currentKey: keyof AccountingEntryParts | null = null;
+  let currentKey: keyof typeof sections | null = null;
   let matched = false;
 
   value.split(/\r\n|\r|\n/).forEach((line) => {
@@ -448,7 +473,12 @@ function parseLabeledAccountingEntryContent(value: string): AccountingEntryParts
   });
 
   if (!matched) return null;
-  return trimAccountingEntryParts(sections);
+  const legacyMemo = formatLegacyAccountingMemo(sections.summary, sections.basis, sections.caution);
+  return {
+    memo: sections.memo || legacyMemo,
+    debit: sections.debit,
+    credit: sections.credit,
+  };
 }
 
 function parseOldTableAccountingEntryContent(value: string): AccountingEntryParts | null {
@@ -493,27 +523,26 @@ function parseOldTableAccountingEntryContent(value: string): AccountingEntryPart
     summaryLines.push(line.replace(/^거래\/상황:\s*/, ""));
   });
 
-  return trimAccountingEntryParts({
-    summary: summaryLines.join("\n"),
+  return {
+    memo: formatLegacyAccountingMemo(summaryLines.join("\n"), basisLines.join("\n"), cautionLines.join("\n")),
     debit: debitLines.join("\n"),
     credit: creditLines.join("\n"),
-    basis: basisLines.join("\n"),
-    caution: cautionLines.join("\n"),
-  });
+  };
 }
 
 function appendAccountingEntryLine(current: string, line: string) {
   return current ? `${current}\n${line}` : line;
 }
 
-function trimAccountingEntryParts(parts: AccountingEntryParts): AccountingEntryParts {
-  return {
-    summary: parts.summary.trim(),
-    debit: parts.debit.trim(),
-    credit: parts.credit.trim(),
-    basis: parts.basis.trim(),
-    caution: parts.caution.trim(),
-  };
+function formatLegacyAccountingMemo(summary: string, basis: string, caution: string) {
+  return [
+    ["거래/상황:", summary],
+    ["근거:", basis],
+    ["주의할 점:", caution],
+  ]
+    .filter(([, value]) => value.trim())
+    .map(([label, value]) => `${label}\n${value}`)
+    .join("\n\n");
 }
 
 function getPullRefreshLabel(status: PullRefreshStatus) {
@@ -4499,13 +4528,14 @@ function AccountingEntryEditor({ value, onChange }: { value: string; onChange: (
   return (
     <div className="accounting-entry-editor wide-field">
       <label className="field-label">
-        거래/상황
+        메모
         <textarea
           className="math-text-input"
-          value={parts.summary}
-          onChange={(event) => updatePart("summary", event.target.value)}
-          onPaste={pasteIntoPart("summary")}
-          rows={2}
+          value={parts.memo}
+          onChange={(event) => updatePart("memo", event.target.value)}
+          onPaste={pasteIntoPart("memo")}
+          rows={4}
+          placeholder={ACCOUNTING_ENTRY_MEMO_PLACEHOLDER}
         />
       </label>
       <div className="accounting-entry-columns">
@@ -4532,26 +4562,6 @@ function AccountingEntryEditor({ value, onChange }: { value: string; onChange: (
           />
         </label>
       </div>
-      <label className="field-label">
-        근거
-        <textarea
-          className="math-text-input"
-          value={parts.basis}
-          onChange={(event) => updatePart("basis", event.target.value)}
-          onPaste={pasteIntoPart("basis")}
-          rows={2}
-        />
-      </label>
-      <label className="field-label">
-        주의할 점
-        <textarea
-          className="math-text-input"
-          value={parts.caution}
-          onChange={(event) => updatePart("caution", event.target.value)}
-          onPaste={pasteIntoPart("caution")}
-          rows={2}
-        />
-      </label>
     </div>
   );
 }
@@ -5649,10 +5659,10 @@ function AccountingEntryView({ content, className = "", compact = false }: { con
 
   return (
     <div className={rootClassName}>
-      {parts.summary && (
+      {parts.memo && (
         <section className="accounting-entry-section">
-          <strong>거래/상황</strong>
-          <p>{parts.summary}</p>
+          <strong>메모</strong>
+          <p>{parts.memo}</p>
         </section>
       )}
       <div className="accounting-entry-columns">
@@ -5665,22 +5675,6 @@ function AccountingEntryView({ content, className = "", compact = false }: { con
           <p>{parts.credit || "내용 없음"}</p>
         </section>
       </div>
-      {(parts.basis || parts.caution) && (
-        <div className="accounting-entry-footnotes">
-          {parts.basis && (
-            <section className="accounting-entry-section">
-              <strong>근거</strong>
-              <p>{parts.basis}</p>
-            </section>
-          )}
-          {parts.caution && (
-            <section className="accounting-entry-section">
-              <strong>주의할 점</strong>
-              <p>{parts.caution}</p>
-            </section>
-          )}
-        </div>
-      )}
     </div>
   );
 }
