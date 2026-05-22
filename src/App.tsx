@@ -416,6 +416,18 @@ function parseAccountingEntryContent(value: string): AccountingEntryParts {
   return { ...EMPTY_ACCOUNTING_ENTRY, memo: content };
 }
 
+function isAccountingEntryContent(value: string) {
+  if (!value.trim()) return false;
+  const hasCurrentLabels = /^메모:/m.test(value) && /^차변:/m.test(value) && /^대변:/m.test(value);
+  if (hasCurrentLabels) return true;
+
+  const oldTable = parseOldTableAccountingEntryContent(value);
+  if (oldTable && (oldTable.debit || oldTable.credit)) return true;
+
+  const legacy = parseLegacyAccountingEntryContent(value);
+  return Boolean(legacy && (legacy.debit || legacy.credit));
+}
+
 function parseCurrentAccountingEntryContent(value: string): AccountingEntryParts | null {
   const sections: AccountingEntryParts = { ...EMPTY_ACCOUNTING_ENTRY };
   const labelToKey: Record<string, keyof AccountingEntryParts> = {
@@ -4222,6 +4234,7 @@ function RecordModal({
     useReviewCard: editingRecord?.useReviewCard ?? getDefaultReviewCardValue((editingRecord?.type || "일반메모") as RecordType),
     studyState: (editingRecord?.studyState || "미확인") as StudyState,
   });
+  const useAccountingEntryEditor = form.type === "회계처리" || isAccountingEntryContent(form.content);
   const candidateIdsForSubject = candidateStandardTopicIds.filter(
     (standardTopicId) => data.standardTopics.find((topic) => topic.id === standardTopicId)?.subjectId === form.subjectId,
   );
@@ -4481,7 +4494,7 @@ function RecordModal({
               updateData((current) => removeTagFromAllRecords(current, tag));
             }}
           />
-          {form.type === "회계처리" ? (
+          {useAccountingEntryEditor ? (
             <AccountingEntryEditor value={form.content} onChange={(value) => setField("content", value)} />
           ) : (
             <label className="field-label wide-field">
@@ -4786,7 +4799,7 @@ function ReviewPage({
         <h1>{current.title}</h1>
         <RecordMeta data={data} record={current} />
         {showContent ? (
-          current.type === "회계처리" ? (
+          current.type === "회계처리" || isAccountingEntryContent(current.content) ? (
             <AccountingEntryView content={current.content} className="review-content" />
           ) : (
             <p className="review-content">{current.content || "내용 없음"}</p>
@@ -5627,6 +5640,7 @@ function RecordContentPreview({ content, type }: { content: string; type: Record
   const normalizedContent = content || "내용 없음";
   const lineCount = normalizedContent.split(/\r\n|\r|\n/).length;
   const hasMore = content.length > 220 || lineCount > 4;
+  const useAccountingEntryView = type === "회계처리" || isAccountingEntryContent(content);
   const contentClassName = [
     expanded || !hasMore ? "record-content expanded" : "record-content preview",
   ]
@@ -5635,7 +5649,7 @@ function RecordContentPreview({ content, type }: { content: string; type: Record
 
   return (
     <div>
-      {type === "회계처리" ? (
+      {useAccountingEntryView ? (
         <AccountingEntryView content={content} compact={!expanded && hasMore} />
       ) : (
         <p className={contentClassName}>{normalizedContent}</p>
