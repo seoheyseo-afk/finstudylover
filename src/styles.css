@@ -2482,23 +2482,63 @@ summary {
   display: block;
 }
 
-.accounting-entry-input,
-.accounting-entry-content {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+.accounting-entry-editor,
+.accounting-entry-view {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  text-align: left;
 }
 
-.accounting-entry-input {
-  overflow-x: auto;
-  white-space: pre;
+.accounting-entry-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
 }
 
-.accounting-entry-content {
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-wrap: normal;
-  white-space: pre;
-  word-break: normal;
+.accounting-entry-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+  padding: 12px;
+}
+
+.accounting-entry-column + .accounting-entry-column {
+  border-left: 1px solid var(--line);
+}
+
+.accounting-entry-column textarea {
+  min-height: 118px;
+}
+
+.accounting-entry-view.compact {
+  max-height: 220px;
+  overflow: hidden;
+}
+
+.accounting-entry-view strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.accounting-entry-view p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.accounting-entry-section,
+.accounting-entry-footnotes {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
 }
 
 .record-expand-button {

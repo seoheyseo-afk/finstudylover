@@ -114,6 +114,22 @@ const DEFAULT_RECORD_TAGS = [
   "재확인",
 ];
 
+type AccountingEntryParts = {
+  summary: string;
+  debit: string;
+  credit: string;
+  basis: string;
+  caution: string;
+};
+
+const EMPTY_ACCOUNTING_ENTRY: AccountingEntryParts = {
+  summary: "",
+  debit: "",
+  credit: "",
+  basis: "",
+  caution: "",
+};
+
 const REVIEW_CARD_DEFAULT_BY_TYPE: Record<RecordType, boolean> = {
   일반메모: false,
   오답: true,
@@ -128,8 +144,7 @@ const REVIEW_CARD_DEFAULT_BY_TYPE: Record<RecordType, boolean> = {
 const RECORD_TEMPLATES: Record<RecordType, string> = {
   오답: "틀린 이유:\n정답 포인트:\n다음에 볼 때 체크할 것:",
   헷갈림: "헷갈린 개념:\n구분 기준:\n예시:\n한 줄 정리:",
-  회계처리:
-    "거래/상황:\n\n차변                         | 대변\n계정과목 / 금액              | 계정과목 / 금액\n-----------------------------|-----------------------------\n                              |\n                              |\n\n근거:\n주의할 점:",
+  회계처리: formatAccountingEntryContent(EMPTY_ACCOUNTING_ENTRY),
   암기사항: "외울 내용:\n조건:\n예외:\n한 줄 암기 포인트:",
   GPT링크: "질문한 내용:\n핵심 답변:\n다시 볼 포인트:\n링크:",
   주의사항: "주의할 조건:\n실수하기 쉬운 부분:\n체크포인트:",
@@ -374,6 +389,131 @@ function normalizePastedMathText(value: string) {
 
 function normalizePasteCompareText(value: string) {
   return normalizeFormulaText(value).replace(/\s+/g, "");
+}
+
+function formatAccountingEntryContent(parts: AccountingEntryParts) {
+  return [
+    "거래/상황:",
+    parts.summary.trimEnd(),
+    "",
+    "차변:",
+    parts.debit.trimEnd(),
+    "",
+    "대변:",
+    parts.credit.trimEnd(),
+    "",
+    "근거:",
+    parts.basis.trimEnd(),
+    "주의할 점:",
+    parts.caution.trimEnd(),
+  ].join("\n");
+}
+
+function parseAccountingEntryContent(value: string): AccountingEntryParts {
+  const content = value.trimEnd();
+  if (!content.trim()) return { ...EMPTY_ACCOUNTING_ENTRY };
+
+  const oldTable = parseOldTableAccountingEntryContent(content);
+  if (oldTable && (oldTable.debit || oldTable.credit)) return oldTable;
+
+  const labeled = parseLabeledAccountingEntryContent(content);
+  if (labeled) return labeled;
+
+  return { ...EMPTY_ACCOUNTING_ENTRY, summary: content };
+}
+
+function parseLabeledAccountingEntryContent(value: string): AccountingEntryParts | null {
+  const sections: AccountingEntryParts = { ...EMPTY_ACCOUNTING_ENTRY };
+  const labelToKey: Record<string, keyof AccountingEntryParts> = {
+    "거래/상황": "summary",
+    차변: "debit",
+    대변: "credit",
+    근거: "basis",
+    "주의할 점": "caution",
+  };
+  let currentKey: keyof AccountingEntryParts | null = null;
+  let matched = false;
+
+  value.split(/\r\n|\r|\n/).forEach((line) => {
+    const match = line.match(/^(거래\/상황|차변|대변|근거|주의할 점):\s*(.*)$/);
+    if (match) {
+      currentKey = labelToKey[match[1]];
+      sections[currentKey] = appendAccountingEntryLine(sections[currentKey], match[2]);
+      matched = true;
+      return;
+    }
+    if (currentKey) {
+      sections[currentKey] = appendAccountingEntryLine(sections[currentKey], line);
+    }
+  });
+
+  if (!matched) return null;
+  return trimAccountingEntryParts(sections);
+}
+
+function parseOldTableAccountingEntryContent(value: string): AccountingEntryParts | null {
+  if (!value.includes("|")) return null;
+
+  const lines = value.split(/\r\n|\r|\n/);
+  const summaryLines: string[] = [];
+  const debitLines: string[] = [];
+  const creditLines: string[] = [];
+  const basisLines: string[] = [];
+  const cautionLines: string[] = [];
+  let mode: "summary" | "table" | "basis" | "caution" = "summary";
+
+  lines.forEach((line) => {
+    if (/^근거:\s*/.test(line)) {
+      mode = "basis";
+      basisLines.push(line.replace(/^근거:\s*/, ""));
+      return;
+    }
+    if (/^주의할 점:\s*/.test(line)) {
+      mode = "caution";
+      cautionLines.push(line.replace(/^주의할 점:\s*/, ""));
+      return;
+    }
+    if (mode === "summary" && line.includes("|")) mode = "table";
+
+    if (mode === "table") {
+      if (!line.includes("|") || /^[-\s|]+$/.test(line) || /^\s*차변\s*\|\s*대변\s*$/.test(line)) return;
+      const [debit = "", credit = ""] = line.split("|");
+      if (debit.trim() && debit.trim() !== "계정과목 / 금액") debitLines.push(debit.trimEnd());
+      if (credit.trim() && credit.trim() !== "계정과목 / 금액") creditLines.push(credit.trimEnd());
+      return;
+    }
+    if (mode === "basis") {
+      basisLines.push(line);
+      return;
+    }
+    if (mode === "caution") {
+      cautionLines.push(line);
+      return;
+    }
+    summaryLines.push(line.replace(/^거래\/상황:\s*/, ""));
+  });
+
+  return trimAccountingEntryParts({
+    summary: summaryLines.join("\n"),
+    debit: debitLines.join("\n"),
+    credit: creditLines.join("\n"),
+    basis: basisLines.join("\n"),
+    caution: cautionLines.join("\n"),
+  });
+}
+
+function appendAccountingEntryLine(current: string, line: string) {
+  return current ? `${current}\n${line}` : line;
+}
+
+function trimAccountingEntryParts(parts: AccountingEntryParts): AccountingEntryParts {
+  return {
+    summary: parts.summary.trim(),
+    debit: parts.debit.trim(),
+    credit: parts.credit.trim(),
+    basis: parts.basis.trim(),
+    caution: parts.caution.trim(),
+  };
 }
 
 function getPullRefreshLabel(status: PullRefreshStatus) {
@@ -4312,17 +4452,20 @@ function RecordModal({
               updateData((current) => removeTagFromAllRecords(current, tag));
             }}
           />
-          <label className="field-label wide-field">
-            내용
-            <textarea
-              className={form.type === "회계처리" ? "math-text-input accounting-entry-input" : "math-text-input"}
-              value={form.content}
-              onChange={(event) => setField("content", event.target.value)}
-              onPaste={(event) => handleRichMathTextPaste(event, (value) => setField("content", value))}
-              wrap={form.type === "회계처리" ? "off" : undefined}
-              rows={7}
-            />
-          </label>
+          {form.type === "회계처리" ? (
+            <AccountingEntryEditor value={form.content} onChange={(value) => setField("content", value)} />
+          ) : (
+            <label className="field-label wide-field">
+              내용
+              <textarea
+                className="math-text-input"
+                value={form.content}
+                onChange={(event) => setField("content", event.target.value)}
+                onPaste={(event) => handleRichMathTextPaste(event, (value) => setField("content", value))}
+                rows={7}
+              />
+            </label>
+          )}
           <label className="check-row wide-field">
             <input
               type="checkbox"
@@ -4340,6 +4483,75 @@ function RecordModal({
           <button className="primary-button">{editingRecord ? "수정" : "추가"}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function AccountingEntryEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const parts = parseAccountingEntryContent(value);
+  const updatePart = (key: keyof AccountingEntryParts, nextValue: string) => {
+    onChange(formatAccountingEntryContent({ ...parts, [key]: nextValue }));
+  };
+  const pasteIntoPart = (key: keyof AccountingEntryParts) => (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    handleRichMathTextPaste(event, (nextValue) => updatePart(key, nextValue));
+  };
+
+  return (
+    <div className="accounting-entry-editor wide-field">
+      <label className="field-label">
+        거래/상황
+        <textarea
+          className="math-text-input"
+          value={parts.summary}
+          onChange={(event) => updatePart("summary", event.target.value)}
+          onPaste={pasteIntoPart("summary")}
+          rows={2}
+        />
+      </label>
+      <div className="accounting-entry-columns">
+        <label className="accounting-entry-column field-label">
+          차변
+          <textarea
+            className="math-text-input"
+            value={parts.debit}
+            onChange={(event) => updatePart("debit", event.target.value)}
+            onPaste={pasteIntoPart("debit")}
+            rows={5}
+            placeholder="계정과목 / 금액"
+          />
+        </label>
+        <label className="accounting-entry-column field-label">
+          대변
+          <textarea
+            className="math-text-input"
+            value={parts.credit}
+            onChange={(event) => updatePart("credit", event.target.value)}
+            onPaste={pasteIntoPart("credit")}
+            rows={5}
+            placeholder="계정과목 / 금액"
+          />
+        </label>
+      </div>
+      <label className="field-label">
+        근거
+        <textarea
+          className="math-text-input"
+          value={parts.basis}
+          onChange={(event) => updatePart("basis", event.target.value)}
+          onPaste={pasteIntoPart("basis")}
+          rows={2}
+        />
+      </label>
+      <label className="field-label">
+        주의할 점
+        <textarea
+          className="math-text-input"
+          value={parts.caution}
+          onChange={(event) => updatePart("caution", event.target.value)}
+          onPaste={pasteIntoPart("caution")}
+          rows={2}
+        />
+      </label>
     </div>
   );
 }
@@ -4564,9 +4776,11 @@ function ReviewPage({
         <h1>{current.title}</h1>
         <RecordMeta data={data} record={current} />
         {showContent ? (
-          <p className={current.type === "회계처리" ? "review-content accounting-entry-content" : "review-content"}>
-            {current.content || "내용 없음"}
-          </p>
+          current.type === "회계처리" ? (
+            <AccountingEntryView content={current.content} className="review-content" />
+          ) : (
+            <p className="review-content">{current.content || "내용 없음"}</p>
+          )
         ) : (
           <p className="review-placeholder">스페이스바 또는 내용 보기</p>
         )}
@@ -5405,14 +5619,17 @@ function RecordContentPreview({ content, type }: { content: string; type: Record
   const hasMore = content.length > 220 || lineCount > 4;
   const contentClassName = [
     expanded || !hasMore ? "record-content expanded" : "record-content preview",
-    type === "회계처리" ? "accounting-entry-content" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   return (
     <div>
-      <p className={contentClassName}>{normalizedContent}</p>
+      {type === "회계처리" ? (
+        <AccountingEntryView content={content} compact={!expanded && hasMore} />
+      ) : (
+        <p className={contentClassName}>{normalizedContent}</p>
+      )}
       {hasMore && (
         <button
           type="button"
@@ -5421,6 +5638,48 @@ function RecordContentPreview({ content, type }: { content: string; type: Record
         >
           {expanded ? "접기" : "더보기"}
         </button>
+      )}
+    </div>
+  );
+}
+
+function AccountingEntryView({ content, className = "", compact = false }: { content: string; className?: string; compact?: boolean }) {
+  const parts = parseAccountingEntryContent(content);
+  const rootClassName = ["accounting-entry-view", className, compact ? "compact" : ""].filter(Boolean).join(" ");
+
+  return (
+    <div className={rootClassName}>
+      {parts.summary && (
+        <section className="accounting-entry-section">
+          <strong>거래/상황</strong>
+          <p>{parts.summary}</p>
+        </section>
+      )}
+      <div className="accounting-entry-columns">
+        <section className="accounting-entry-column">
+          <strong>차변</strong>
+          <p>{parts.debit || "내용 없음"}</p>
+        </section>
+        <section className="accounting-entry-column">
+          <strong>대변</strong>
+          <p>{parts.credit || "내용 없음"}</p>
+        </section>
+      </div>
+      {(parts.basis || parts.caution) && (
+        <div className="accounting-entry-footnotes">
+          {parts.basis && (
+            <section className="accounting-entry-section">
+              <strong>근거</strong>
+              <p>{parts.basis}</p>
+            </section>
+          )}
+          {parts.caution && (
+            <section className="accounting-entry-section">
+              <strong>주의할 점</strong>
+              <p>{parts.caution}</p>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );
