@@ -111,6 +111,14 @@ textarea {
   line-height: 1.55;
 }
 
+input::spelling-error,
+textarea::spelling-error,
+input::grammar-error,
+textarea::grammar-error {
+  text-decoration-color: rgb(111 135 150 / 42%);
+  text-decoration-thickness: 1px;
+}
+
 .math-text-input,
 .record-content,
 .review-content {

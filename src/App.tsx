@@ -4501,6 +4501,7 @@ function RecordModal({
               내용
               <textarea
                 className="math-text-input"
+                spellCheck={false}
                 value={form.content}
                 onChange={(event) => setField("content", event.target.value)}
                 onPaste={(event) => handleRichMathTextPaste(event, (value) => setField("content", value))}
@@ -4544,6 +4545,7 @@ function AccountingEntryEditor({ value, onChange }: { value: string; onChange: (
         메모
         <textarea
           className="math-text-input"
+          spellCheck={false}
           value={parts.memo}
           onChange={(event) => updatePart("memo", event.target.value)}
           onPaste={pasteIntoPart("memo")}
@@ -4556,6 +4558,7 @@ function AccountingEntryEditor({ value, onChange }: { value: string; onChange: (
           차변
           <textarea
             className="math-text-input"
+            spellCheck={false}
             value={parts.debit}
             onChange={(event) => updatePart("debit", event.target.value)}
             onPaste={pasteIntoPart("debit")}
@@ -4567,6 +4570,7 @@ function AccountingEntryEditor({ value, onChange }: { value: string; onChange: (
           대변
           <textarea
             className="math-text-input"
+            spellCheck={false}
             value={parts.credit}
             onChange={(event) => updatePart("credit", event.target.value)}
             onPaste={pasteIntoPart("credit")}
