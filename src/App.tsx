@@ -1871,6 +1871,7 @@ function StandardTopicPanel({
     if (typeFilter && record.type !== typeFilter) return false;
     return true;
   });
+  const sortedRecords = sortRecordsBySubtopicOrder(filteredRecords, subtopics);
 
   return (
     <div className="panel-stack">
@@ -1919,8 +1920,8 @@ function StandardTopicPanel({
         </button>
         <button
           className="secondary-button"
-          disabled={filteredRecords.filter((record) => record.useReviewCard).length === 0}
-          onClick={() => startReview(topic.title, filteredRecords)}
+          disabled={sortedRecords.filter((record) => record.useReviewCard).length === 0}
+          onClick={() => startReview(topic.title, sortedRecords)}
         >
           카드 복습
         </button>
@@ -1928,7 +1929,7 @@ function StandardTopicPanel({
 
       <RecordList
         data={data}
-        records={filteredRecords}
+        records={sortedRecords}
         onEdit={(recordId) => openRecordModal({ mode: "edit", recordId })}
         onDelete={(recordId) => confirmAndDeleteRecord(updateData, recordId)}
       />
@@ -5884,6 +5885,27 @@ function isRecordDeleted(record: StudyRecord) {
 
 function getActiveRecords(data: StudyData) {
   return data.records.filter((record) => !isRecordDeleted(record));
+}
+
+function sortRecordsBySubtopicOrder(records: StudyRecord[], subtopics: Subtopic[]) {
+  const subtopicOrder = new Map(subtopics.map((subtopic, index) => [subtopic.id, { order: subtopic.order, index }]));
+
+  return records
+    .map((record, index) => ({ record, index }))
+    .sort((a, b) => {
+      const aOrder = a.record.subtopicId ? subtopicOrder.get(a.record.subtopicId) : undefined;
+      const bOrder = b.record.subtopicId ? subtopicOrder.get(b.record.subtopicId) : undefined;
+
+      if (aOrder && bOrder) {
+        if (aOrder.order !== bOrder.order) return aOrder.order - bOrder.order;
+        if (aOrder.index !== bOrder.index) return aOrder.index - bOrder.index;
+        return a.index - b.index;
+      }
+      if (aOrder) return -1;
+      if (bOrder) return 1;
+      return a.index - b.index;
+    })
+    .map((item) => item.record);
 }
 
 function isRecordUncategorized(data: StudyData, record: StudyRecord) {
