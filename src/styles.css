@@ -2466,6 +2466,7 @@ summary {
   color: var(--text);
   line-height: 1.6;
   overflow-wrap: anywhere;
+  text-align: left;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2959,6 +2960,11 @@ textarea::placeholder {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.review-content {
+  width: 100%;
+  text-align: left;
 }
 
 .review-placeholder {
