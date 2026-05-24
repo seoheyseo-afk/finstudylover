@@ -270,6 +270,10 @@ function isInteractiveElement(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("button, input, select, textarea, summary, a, [role='button'], .modal-backdrop"));
 }
 
+function isReviewCardControl(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("button, input, select, textarea, summary, a"));
+}
+
 function handleRichMathTextPaste(event: ClipboardEvent<HTMLTextAreaElement>, onChange: (value: string) => void) {
   const text = getRichMathClipboardText(event.clipboardData);
   if (!text) return;
@@ -4806,7 +4810,7 @@ function ReviewPage({
             mark("모름");
             return;
           }
-          if (Math.abs(distance) <= 12 && !isInteractiveElement(event.target)) {
+          if (Math.abs(distance) <= 12 && !isReviewCardControl(event.target)) {
             setShowContent((value) => !value);
           }
         }}
