@@ -4787,7 +4787,10 @@ function ReviewPage({
         </button>
       </div>
       <article
-        className="review-card"
+        className="review-card review-card-clickable"
+        role="button"
+        tabIndex={0}
+        aria-label={showContent ? "카드 내용 숨기기" : "카드 내용 열기"}
         onPointerDown={(event) => {
           pointerStart.current = event.clientX;
         }}
@@ -4795,8 +4798,17 @@ function ReviewPage({
           if (pointerStart.current === null) return;
           const distance = event.clientX - pointerStart.current;
           pointerStart.current = null;
-          if (distance > 80) mark("앎");
-          if (distance < -80) mark("모름");
+          if (distance > 80) {
+            mark("앎");
+            return;
+          }
+          if (distance < -80) {
+            mark("모름");
+            return;
+          }
+          if (Math.abs(distance) <= 12 && !isInteractiveElement(event.target)) {
+            setShowContent((value) => !value);
+          }
         }}
       >
         <p className="eyebrow">{current.type}</p>
@@ -4808,9 +4820,7 @@ function ReviewPage({
           ) : (
             <p className="review-content">{current.content || "내용 없음"}</p>
           )
-        ) : (
-          <p className="review-placeholder">스페이스바 또는 내용 보기</p>
-        )}
+        ) : null}
         {current.link && (
           <a className="attached-link" href={current.link} target="_blank" rel="noreferrer">
             <LinkIcon />
@@ -4821,9 +4831,6 @@ function ReviewPage({
       <div className="review-actions">
         <button className="unknown-button" onClick={() => mark("모름")}>
           ← 모름
-        </button>
-        <button className="secondary-button" onClick={() => setShowContent((value) => !value)}>
-          내용 보기
         </button>
         <button className="known-button" onClick={() => mark("앎")}>
           앎 →

@@ -3013,6 +3013,10 @@ textarea::placeholder {
   touch-action: pan-y;
 }
 
+.review-card-clickable {
+  cursor: pointer;
+}
+
 .review-card h1 {
   font-size: clamp(28px, 5vw, 54px);
 }
@@ -3040,7 +3044,7 @@ textarea::placeholder {
 
 .review-actions {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .known-button {
