@@ -4,6 +4,7 @@ import type {
   MaterialTopic,
   StandardTopic,
   StudyData,
+  StudyRecord,
   SubjectMaterialSetting,
   Subtopic,
   Subject,
@@ -1018,6 +1019,10 @@ function materialTopicId(materialId: string, order: number) {
   return `mt-${materialId.replace("material-", "")}-${String(order).padStart(2, "0")}`;
 }
 
+function subtopicId(prefix: "accounting" | "finance" | "tax" | "management" | "economics", standardOrder: number, order: number) {
+  return `sub-${standardId(prefix, standardOrder)}-${String(order).padStart(2, "0")}`;
+}
+
 function buildStandardTopics(): StandardTopic[] {
   const topics: StandardTopic[] = [];
   let accountingOrder = 1;
@@ -1380,6 +1385,125 @@ function buildMappings(): TopicMapping[] {
   return mappings;
 }
 
+const financeFormulaRecordSeeds: Array<{
+  id: string;
+  title: string;
+  standardOrder: number;
+  subtopicOrder?: number;
+  content: string;
+}> = [
+  {
+    id: "record-default-finance-formula-time-value",
+    title: "화폐의 시간가치 공식",
+    standardOrder: 2,
+    subtopicOrder: 1,
+    content: "FV = PV(1+r)^n\nPV = FV/(1+r)^n\n보통연금 PV = C[1 - 1/(1+r)^n]/r\n영구연금 PV = C/r",
+  },
+  {
+    id: "record-default-finance-formula-npv-irr-pi",
+    title: "투자안 평가 NPV·IRR·PI",
+    standardOrder: 4,
+    subtopicOrder: 1,
+    content: "NPV = Σ CF_t/(1+k)^t - I_0\nIRR: NPV = 0이 되는 할인율\nPI = 현금유입 현재가치 / 초기투자액\n독립투자안: NPV > 0 채택",
+  },
+  {
+    id: "record-default-finance-formula-ocf",
+    title: "영업현금흐름 OCF",
+    standardOrder: 6,
+    subtopicOrder: 2,
+    content: "OCF = EBIT(1-T) + 감가상각비\nOCF = (매출 - 현금영업비용)(1-T) + T×감가상각비\n감가상각 절세효과 = T×감가상각비",
+  },
+  {
+    id: "record-default-finance-formula-portfolio",
+    title: "포트폴리오 기대수익률·위험",
+    standardOrder: 9,
+    subtopicOrder: 1,
+    content: "E(R_p) = Σ w_i E(R_i)\nσ_p^2 = ΣΣ w_i w_j Cov(R_i,R_j)\n2자산: σ_p^2 = w_A^2σ_A^2 + w_B^2σ_B^2 + 2w_Aw_Bσ_Aσ_Bρ_AB",
+  },
+  {
+    id: "record-default-finance-formula-capm",
+    title: "CAPM·베타",
+    standardOrder: 10,
+    subtopicOrder: 5,
+    content: "E(R_i) = R_f + β_i[E(R_m)-R_f]\nβ_i = Cov(R_i,R_m) / Var(R_m)\n시장위험프리미엄 = E(R_m)-R_f",
+  },
+  {
+    id: "record-default-finance-formula-stock-valuation",
+    title: "주식 평가 공식",
+    standardOrder: 14,
+    subtopicOrder: 1,
+    content: "제로성장: P_0 = D/k\n고든모형: P_0 = D_1/(k-g)\n성장률: g = b×ROE\nPER 접근: 주가 = EPS×PER",
+  },
+  {
+    id: "record-default-finance-formula-bond-price",
+    title: "채권가격·수익률 공식",
+    standardOrder: 15,
+    subtopicOrder: 1,
+    content: "채권가격 P = Σ C/(1+r)^t + F/(1+r)^n\n할인채 P = F/(1+r)^n\n수익률 상승 → 채권가격 하락",
+  },
+  {
+    id: "record-default-finance-formula-duration",
+    title: "듀레이션·수정듀레이션",
+    standardOrder: 16,
+    subtopicOrder: 1,
+    content: "D = Σ t×PV(CF_t)/P\n수정듀레이션 MD = D/(1+y)\n가격변화율 근사: ΔP/P ≈ -MD×Δy\n볼록성 보정: ΔP/P ≈ -MD×Δy + 1/2×Convexity×(Δy)^2",
+  },
+  {
+    id: "record-default-finance-formula-leverage",
+    title: "영업·재무·결합레버리지",
+    standardOrder: 17,
+    subtopicOrder: 1,
+    content: "DOL = 공헌이익 / 영업이익 = (S-VC)/(S-VC-F)\nDFL = 영업이익 / 순이익 전 이익 = EBIT/(EBIT-I)\nDCL = DOL×DFL",
+  },
+  {
+    id: "record-default-finance-formula-wacc-mm",
+    title: "WACC·MM 법인세 공식",
+    standardOrder: 17,
+    subtopicOrder: 4,
+    content: "WACC = k_d(1-T)D/V + k_eE/V\nMM 법인세: V_L = V_U + T_cD\n부채사용기업 자기자본비용: k_e = k_0 + (k_0-k_d)(1-T)D/E",
+  },
+  {
+    id: "record-default-finance-formula-put-call-parity",
+    title: "풋콜패리티",
+    standardOrder: 23,
+    subtopicOrder: 2,
+    content: "C + PV(K) = P + S_0\nC - P = S_0 - PV(K)\n보호적 풋 = 주식 + 풋\n수탁자 포지션 = 콜 + 무위험채권",
+  },
+  {
+    id: "record-default-finance-formula-futures-fx",
+    title: "선물가격 공식",
+    standardOrder: 25,
+    subtopicOrder: 1,
+    content: "무배당 투자자산 선물가격: F_0 = S_0(1+r)^T\n보유비용 모형: F_0 = S_0 + 보유비용 현재가치 - 편익 현재가치\n베이시스 = 현물가격 - 선물가격",
+  },
+  {
+    id: "record-default-finance-formula-international-parity",
+    title: "국제재무 평가관계",
+    standardOrder: 26,
+    subtopicOrder: 3,
+    content: "이자율평가: F/S = (1+r_d)/(1+r_f)\n구매력평가: 기대환율변화율 ≈ 국내물가상승률 - 해외물가상승률\n국제피셔효과: 기대환율변화율 ≈ 국내이자율 - 해외이자율",
+  },
+];
+
+function buildDefaultRecords(): StudyRecord[] {
+  return financeFormulaRecordSeeds.map((seed, index) => ({
+    id: seed.id,
+    title: seed.title,
+    content: seed.content,
+    type: "암기사항",
+    subjectId: "subject-finance",
+    standardTopicId: standardId("finance", seed.standardOrder),
+    subtopicId: seed.subtopicOrder ? subtopicId("finance", seed.standardOrder, seed.subtopicOrder) : undefined,
+    tags: ["공식", "재무관리"],
+    createdAt: NOW,
+    updatedAt: new Date(new Date(NOW).getTime() + index * 1000).toISOString(),
+    useReviewCard: true,
+    studyState: "모름",
+    knownCount: 0,
+    unknownCount: 0,
+  }));
+}
+
 export function createDefaultStudyData(): StudyData {
   const { materials, materialTopics } = buildMaterials();
 
@@ -1393,7 +1517,7 @@ export function createDefaultStudyData(): StudyData {
     standardTopics: buildStandardTopics(),
     subtopics: buildSubtopics(),
     mappings: buildMappings(),
-    records: [],
+    records: buildDefaultRecords(),
     dDays: [],
     todayCompletions: [],
     settings: {
