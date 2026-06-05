@@ -23,6 +23,15 @@ type StudyDataRow = {
   updated_at: string;
 };
 
+let refreshInFlight: { refreshToken: string; promise: Promise<AuthSession> } | null = null;
+let lastRefresh:
+  | {
+      oldRefreshToken: string;
+      session: AuthSession;
+      savedAt: number;
+    }
+  | null = null;
+
 function requireConfig() {
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
   return { supabaseUrl, supabaseAnonKey };
@@ -82,8 +91,27 @@ export async function signUpWithPassword(email: string, password: string) {
 
 export async function refreshAuthSession(session: AuthSession) {
   if (session.expiresAt - Date.now() > 60_000) return session;
-  const response = await requestAuth("token?grant_type=refresh_token", { refresh_token: session.refreshToken });
-  return createSession(response);
+  if (lastRefresh && lastRefresh.oldRefreshToken === session.refreshToken && Date.now() - lastRefresh.savedAt < 30_000) {
+    return lastRefresh.session;
+  }
+  if (refreshInFlight?.refreshToken === session.refreshToken) return refreshInFlight.promise;
+
+  const promise = requestAuth("token?grant_type=refresh_token", { refresh_token: session.refreshToken })
+    .then(createSession)
+    .then((refreshed) => {
+      lastRefresh = {
+        oldRefreshToken: session.refreshToken,
+        session: refreshed,
+        savedAt: Date.now(),
+      };
+      return refreshed;
+    })
+    .finally(() => {
+      if (refreshInFlight?.promise === promise) refreshInFlight = null;
+    });
+
+  refreshInFlight = { refreshToken: session.refreshToken, promise };
+  return promise;
 }
 
 export async function loadCloudStudyData(session: AuthSession): Promise<StudyDataRow | null> {

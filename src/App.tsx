@@ -776,23 +776,40 @@ function App() {
     void flushCloudSyncQueue();
   };
 
+  const rememberFreshAuthSession = async (current: AuthSession, refreshed: AuthSession) => {
+    if (refreshed.accessToken !== current.accessToken || refreshed.refreshToken !== current.refreshToken) {
+      await saveAuthSession(refreshed);
+      rememberAuthSession(refreshed);
+    }
+    return refreshed;
+  };
+
+  const getFreshAuthSession = async () => {
+    const session = authSessionRef.current;
+    if (!session) throw new Error("로그인이 필요합니다.");
+    try {
+      return await rememberFreshAuthSession(session, await refreshAuthSession(session));
+    } catch (error) {
+      const savedSession = await loadAuthSession();
+      if (savedSession && savedSession.refreshToken !== session.refreshToken) {
+        return rememberFreshAuthSession(savedSession, await refreshAuthSession(savedSession));
+      }
+      throw error;
+    }
+  };
+
   const flushCloudSyncQueue = async () => {
     const syncState = cloudSyncRef.current;
     if (syncState.inFlight) return;
-    const session = authSessionRef.current;
     const pendingData = syncState.pendingData;
     const pendingPatch = syncState.pendingPatch;
-    if (!session || !pendingData || !pendingPatch) return;
+    if (!authSessionRef.current || !pendingData || !pendingPatch) return;
 
     syncState.inFlight = true;
     syncState.pendingData = null;
     syncState.pendingPatch = null;
     try {
-      const refreshed = await refreshAuthSession(session);
-      if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
-        await saveAuthSession(refreshed);
-        rememberAuthSession(refreshed);
-      }
+      const refreshed = await getFreshAuthSession();
       const cloudRow = await loadCloudStudyData(refreshed);
       const mergedData = cloudRow ? mergeStudyDataWithPatch(cloudRow.data, pendingData, pendingPatch) : pendingData;
       await saveCloudStudyData(refreshed, mergedData);
@@ -807,17 +824,6 @@ function App() {
       syncState.inFlight = false;
       if (syncState.pendingData && syncState.pendingPatch && authSessionRef.current) void flushCloudSyncQueue();
     }
-  };
-
-  const getFreshAuthSession = async () => {
-    const session = authSessionRef.current;
-    if (!session) throw new Error("로그인이 필요합니다.");
-    const refreshed = await refreshAuthSession(session);
-    if (refreshed.accessToken !== session.accessToken || refreshed.refreshToken !== session.refreshToken) {
-      await saveAuthSession(refreshed);
-      rememberAuthSession(refreshed);
-    }
-    return refreshed;
   };
 
   const updateData = (updater: (current: StudyData) => StudyData) => {
