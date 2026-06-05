@@ -2807,12 +2807,22 @@ function RecordsPage({
     });
   const standardOptionIds = new Set(standardOptions.map((topic) => topic.id));
   const effectiveStandardTopicIds = filters.standardTopicIds.filter((id) => standardOptionIds.has(id));
-  const subtopicOptions = data.subtopics.filter((subtopic) => {
-    if (effectiveStandardTopicIds.length > 0) return effectiveStandardTopicIds.includes(subtopic.standardTopicId);
-    if (filters.subjectIds.length === 0) return true;
-    const parent = data.standardTopics.find((topic) => topic.id === subtopic.standardTopicId);
-    return parent ? filters.subjectIds.includes(parent.subjectId) : false;
-  });
+  const standardOptionRank = new Map(standardOptions.map((topic, index) => [topic.id, index]));
+  const subtopicOriginalRank = new Map(data.subtopics.map((subtopic, index) => [subtopic.id, index]));
+  const subtopicOptions = data.subtopics
+    .filter((subtopic) => {
+      if (effectiveStandardTopicIds.length > 0) return effectiveStandardTopicIds.includes(subtopic.standardTopicId);
+      if (filters.subjectIds.length === 0) return true;
+      const parent = data.standardTopics.find((topic) => topic.id === subtopic.standardTopicId);
+      return parent ? filters.subjectIds.includes(parent.subjectId) : false;
+    })
+    .sort((a, b) => {
+      const aStandardRank = standardOptionRank.get(a.standardTopicId) ?? Number.MAX_SAFE_INTEGER;
+      const bStandardRank = standardOptionRank.get(b.standardTopicId) ?? Number.MAX_SAFE_INTEGER;
+      if (aStandardRank !== bStandardRank) return aStandardRank - bStandardRank;
+      if (a.order !== b.order) return a.order - b.order;
+      return (subtopicOriginalRank.get(a.id) ?? 0) - (subtopicOriginalRank.get(b.id) ?? 0);
+    });
   const subtopicOptionIds = new Set(subtopicOptions.map((subtopic) => subtopic.id));
   const effectiveSubtopicIds = filters.subtopicIds.filter((id) => subtopicOptionIds.has(id));
   const materialOptions = data.materials.filter(
