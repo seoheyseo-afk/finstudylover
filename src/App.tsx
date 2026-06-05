@@ -2861,18 +2861,20 @@ function RecordsPage({
     Array.from(materialTopicOptionIds).join("|"),
   ]);
 
-  const filteredRecords = getActiveRecords(data).filter((record) => {
-    if (filters.subjectIds.length > 0 && (!record.subjectId || !filters.subjectIds.includes(record.subjectId))) return false;
-    if (effectiveStandardTopicIds.length > 0 && (!record.standardTopicId || !effectiveStandardTopicIds.includes(record.standardTopicId))) return false;
-    if (effectiveSubtopicIds.length > 0 && (!record.subtopicId || !effectiveSubtopicIds.includes(record.subtopicId))) return false;
-    if (effectiveMaterialIds.length > 0 && (!record.materialId || !effectiveMaterialIds.includes(record.materialId))) return false;
-    if (effectiveMaterialTopicIds.length > 0 && (!record.materialTopicId || !effectiveMaterialTopicIds.includes(record.materialTopicId))) return false;
-    if (filters.types.length > 0 && !filters.types.includes(record.type)) return false;
-    if (filters.studyStates.length > 0 && !filters.studyStates.includes(record.studyState)) return false;
-    if (filters.tagNames.length > 0 && !filters.tagNames.some((tag) => record.tags?.includes(tag))) return false;
-    if (filters.uncategorizedOnly && !isRecordUncategorized(data, record)) return false;
-    return true;
-  });
+  const filteredRecords = sortRecordsByCreatedAtAsc(
+    getActiveRecords(data).filter((record) => {
+      if (filters.subjectIds.length > 0 && (!record.subjectId || !filters.subjectIds.includes(record.subjectId))) return false;
+      if (effectiveStandardTopicIds.length > 0 && (!record.standardTopicId || !effectiveStandardTopicIds.includes(record.standardTopicId))) return false;
+      if (effectiveSubtopicIds.length > 0 && (!record.subtopicId || !effectiveSubtopicIds.includes(record.subtopicId))) return false;
+      if (effectiveMaterialIds.length > 0 && (!record.materialId || !effectiveMaterialIds.includes(record.materialId))) return false;
+      if (effectiveMaterialTopicIds.length > 0 && (!record.materialTopicId || !effectiveMaterialTopicIds.includes(record.materialTopicId))) return false;
+      if (filters.types.length > 0 && !filters.types.includes(record.type)) return false;
+      if (filters.studyStates.length > 0 && !filters.studyStates.includes(record.studyState)) return false;
+      if (filters.tagNames.length > 0 && !filters.tagNames.some((tag) => record.tags?.includes(tag))) return false;
+      if (filters.uncategorizedOnly && !isRecordUncategorized(data, record)) return false;
+      return true;
+    }),
+  );
   const deletedRecords = data.records
     .filter(isRecordDeleted)
     .sort((a, b) => (b.deletedAt || "").localeCompare(a.deletedAt || ""));
@@ -6207,6 +6209,20 @@ function isRecordDeleted(record: StudyRecord) {
 
 function getActiveRecords(data: StudyData) {
   return data.records.filter((record) => !isRecordDeleted(record));
+}
+
+function sortRecordsByCreatedAtAsc(records: StudyRecord[]) {
+  return records
+    .map((record, index) => ({ record, index, time: getRecordCreatedSortTime(record) }))
+    .sort((a, b) => {
+      if (a.time !== b.time) return a.time - b.time;
+      return a.index - b.index;
+    })
+    .map((item) => item.record);
+}
+
+function getRecordCreatedSortTime(record: StudyRecord) {
+  return getTimestamp(record.createdAt) || getTimestamp(record.updatedAt);
 }
 
 function sortRecordsBySubtopicOrder(records: StudyRecord[], subtopics: Subtopic[]) {
